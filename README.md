@@ -8,6 +8,8 @@ WorkforceIQ is an AI-assisted workforce planning and scheduling platform being d
 - Stephen Douba
 - Leia Gabriele
 
+---
+
 ## Current Repository
 
 This repository currently contains a proof of concept demonstrating:
@@ -18,11 +20,13 @@ This repository currently contains a proof of concept demonstrating:
 - AI assistant integration using Ollama and Llama 3.2
 - SQLite database
 
+---
+
 ## Requirements
 
 ### Python
 
-Python 3.11+
+Python 3.11 or later
 
 ### Ollama
 
@@ -42,7 +46,22 @@ Verify installation:
 ollama list
 ```
 
-## Running the Application
+You should see:
+
+```text
+llama3.2
+```
+
+---
+
+## Quick Start
+
+Clone the repository:
+
+```bash
+git clone <repository-url>
+cd workforceiq
+```
 
 Install dependencies:
 
@@ -53,7 +72,7 @@ pip install -r requirements.txt
 Initialize the database:
 
 ```bash
-python init_db.py
+python database/init_db.py
 ```
 
 Run the application:
@@ -62,31 +81,117 @@ Run the application:
 python app.py
 ```
 
-Then open:
+Open your browser and navigate to:
 
 ```text
 http://localhost:5000
 ```
 
-## EMPLOYEE MODULE
-The Employee Module currently will route to a table of current employees with a feature to add employees.  In the full version there will be a full CRUD implementation to allow for updating and removing employees.
+---
 
-## FORECASTING MODULE
-The Forecasting Module currently will route to a summary of the scikit-learn output from a sample dataset included in app.py.
+## Current Modules
 
-## REPORTS MODULE
-Under construction.
+### Authentication
 
-## AI ASSISTANT MODULE
-The AI Assistant Module currently will route to a prompt where you can ask the llama3.2 model through Ollama questions about the Employees table, such as:
-  * How many employees are there?
-  * What is each employee's wages?
-  * List all employee data.
-  * What is the average wage for all employees?
-The model should respond in less than 10 seconds.
+The application currently supports user login using credentials stored in a local SQLite database.
+
+Future enhancements may include:
+
+- User registration
+- Password hashing
+- Role-based permissions
+- Session management
+
+---
+
+### Employee Module
+
+The Employee Module currently displays a list of employees and provides functionality to add employees.
+
+Planned enhancements include:
+
+- Full CRUD operations
+- Employee qualifications
+- Employee availability
+- Time-off requests
+- Employee search and filtering
+
+---
+
+### Forecasting Module
+
+The Forecasting Module currently demonstrates a simple scikit-learn forecasting model using sample data included in `app.py`.
+
+The proof of concept forecasts:
+
+- Projected demand
+- Recommended staffing levels
+
+Future enhancements may include:
+
+- Historical sales imports
+- Labor percentage goals
+- Labor cost forecasting
+- Multi-week forecasting
+
+---
+
+### Reports Module
+
+Placeholder for future reporting functionality.
+
+Potential reports include:
+
+- Labor cost analysis
+- Staffing utilization
+- Forecast accuracy
+- Schedule compliance
+
+---
+
+### AI Assistant Module
+
+The AI Assistant currently integrates with the local Ollama-hosted Llama 3.2 model.
+
+The assistant uses data from the Employees table as context when generating responses.
+
+Example questions:
+
+- How many employees are there?
+- List all employees.
+- What is each employee's wage?
+- What is the average employee wage?
+- Which employee has the highest wage?
+
+The purpose of this feature is to demonstrate how WorkforceIQ may use AI to answer workforce-related questions using application data.
+
+---
+
+## Project Status
+
+This repository contains a working proof of concept intended to demonstrate the core ideas behind WorkforceIQ.
+
+Current focus areas include:
+
+- Authentication
+- Employee management
+- AI-assisted workforce questions
+- Forecasting concepts
+- Application usability
+
+The architecture, database schema, and repository organization will evolve as the team progresses through the capstone project.
+
+---
 
 ## Notes
 
-This repository currently contains a proof of concept used to demonstrate WorkforceIQ's core concepts. The architecture, database schema, and project organization will be refined as the team progresses through the capstone project.
+This project is an educational prototype and does not currently use real employee data, payroll systems, or production forecasting models.
 
-Feel free to explore the code, try the current features, and share feedback and ideas for future development.
+Team members are encouraged to:
+
+- Explore the code
+- Test existing features
+- Suggest improvements
+- Discuss architecture and implementation ideas
+
+As development progresses, the repository will evolve from a proof of concept into the full WorkforceIQ application.
