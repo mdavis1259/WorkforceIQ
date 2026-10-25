@@ -1,0 +1,237 @@
+/* ==========================
+   WorkforceIQ Stylesheet
+   ========================== */
+
+:root {
+    --primary: #1f4e79;
+    --primary-dark: #163955;
+    --secondary: #4d81b3;
+    --background: #f4f7fb;
+    --card-bg: #ffffff;
+    --text: #333;
+    --muted: #666;
+    --border: #d6dce5;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(
+        135deg,
+        #eef3f9 0%,
+        #dce8f5 100%
+    );
+    color: var(--text);
+    min-height: 100vh;
+}
+
+/* ==========================
+   LOGIN PAGE
+   ========================== */
+
+.login-container {
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.login-card {
+    background: var(--card-bg);
+    width: 420px;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+}
+
+.login-card h1 {
+    text-align: center;
+    margin-bottom: 10px;
+    color: var(--primary);
+    font-size: 2rem;
+}
+
+.subtitle {
+    text-align: center;
+    margin-bottom: 30px;
+    color: var(--muted);
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    font-size: 15px;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.15);
+}
+
+/* ==========================
+   BUTTONS
+   ========================== */
+
+.btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 15px;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ==========================
+   DASHBOARD
+   ========================== */
+
+.dashboard {
+    padding: 40px;
+}
+
+.header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.header h1 {
+    color: var(--primary);
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.header p {
+    color: var(--muted);
+}
+
+/* ==========================
+   MODULE CARDS
+   ========================== */
+
+.module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
+}
+
+.module-card {
+    background: var(--card-bg);
+    padding: 25px;
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    transition: all 0.2s ease;
+}
+
+.module-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.module-card h2 {
+    margin-bottom: 15px;
+    color: var(--primary);
+}
+
+.module-card p {
+    min-height: 60px;
+    margin-bottom: 15px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+/* ==========================
+   EMPLOYEE FORMS
+   ========================== */
+
+.employee-form {
+    margin-bottom: 30px;
+}
+
+.employee-form input {
+    padding: 10px 12px;
+    margin-right: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+/* ==========================
+   TABLES
+   ========================== */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+
+th {
+    background: var(--primary);
+    color: white;
+    font-weight: 600;
+}
+
+th,
+td {
+    padding: 12px;
+    border: 1px solid #e4e8ee;
+    text-align: center;
+    vertical-align: middle;
+}
+
+tr:nth-child(even) {
+    background-color: #f8f9fb;
+}
+
+tr:hover {
+    background-color: #edf5ff;
+}
+
+/* ==========================
+   UTILITIES
+   ========================== */
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
