@@ -10,6 +10,19 @@ WorkforceIQ is an AI-assisted workforce planning and scheduling platform being d
 
 ---
 
+## Repository Workflow
+
+To help protect the repository while the team begins development, I have proposed the following workflow:
+
+- Changes should be developed on feature branches rather than directly on `main`.
+- Completed work should be submitted through a Pull Request (PR).
+- Pull Requests should ideally be reviewed by at least one other team member before merging.
+- Force pushes to the `main` branch should be avoided.
+
+Please note that these are currently proposed team practices rather than enforced GitHub policies. The repository is hosted under a personal GitHub account, and some branch protection features require a higher-tier GitHub plan to enforce automatically.
+
+**These workflow rules are intended as placeholders and should be reviewed by the team.** As WorkforceIQ evolves, the team may decide to modify, simplify, or expand these practices based on project needs and team consensus.
+
 ## Current Repository
 
 This repository currently contains a proof of concept demonstrating:
