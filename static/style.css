@@ -32,6 +32,32 @@ body {
 }
 
 /* ==========================
+   NAVIGATION
+   ==========================
+.navbar {
+    background: var(--primary);
+    padding: 15px 30px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.15);
+}
+
+.navbar ul {
+    list-style: none;
+    display: flex;
+    gap: 25px;
+}
+
+.navbar a {
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+    transition: opacity 0.2s ease;
+}
+
+.navbar a:hover {
+    opacity: 0.8;
+}
+
+/* ==========================
    LOGIN PAGE
    ========================== */
 .error-message {
@@ -42,6 +68,7 @@ body {
     margin-bottom: 20px;
     border-radius: 8px;
     font-size: 14px;
+}
 
 .login-container {
     height: 100vh;
@@ -189,6 +216,7 @@ body {
 .employee-form input {
     padding: 10px 12px;
     margin-right: 10px;
+    margin-bottom: 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
 }
@@ -198,6 +226,7 @@ body {
    ========================== */
 
 table {
+    margin-top: 20px;
     width: 100%;
     border-collapse: collapse;
     background: white;
@@ -235,6 +264,19 @@ tr:hover {
 .container {
     max-width: 1400px;
     margin: 0 auto;
+    padding: 30px;
+}
+
+.login-card {
+    text-align: center;
+}
+
+.page-card {
+    background: white;
+    padding: 30px;
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    margin-top: 20px;
 }
 
 .card {
@@ -242,4 +284,11 @@ tr:hover {
     border-radius: 12px;
     padding: 20px;
     box-shadow: var(--shadow);
+}
+
+.footer {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    margin-top: 40px;
 }
