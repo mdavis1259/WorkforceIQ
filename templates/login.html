@@ -10,6 +10,12 @@
             <div class="login-card">
                 <h1>WorkforceIQ</h1>
                 <p class="subtitle">AI-Powered Labor Forecasting & Scheduling</p>
+		{% if error %}
+		<div class="error-message">
+			{{ error }}
+		</div>
+		{% endif %}
+
                 <form method="POST">
                     <div class="form-group">
                         <label>Username</label>
