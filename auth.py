@@ -7,7 +7,8 @@ def authenticate_user(username, password, conn):
     cursor.execute("""
         SELECT
             username,
-            password
+            password,
+            level
         FROM Users
         WHERE username = ?
         """, (username,))

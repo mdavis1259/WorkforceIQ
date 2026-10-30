@@ -116,7 +116,7 @@ def employees():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, role, wage FROM employees"
+        "SELECT id, name, role, wage FROM Employees"
     )
 
     employees = cursor.fetchall()
@@ -134,7 +134,7 @@ def add_employee():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-                   INSERT INTO employees
+                   INSERT INTO Employees
                    (name, role, wage)
                    VALUES (?, ?, ?)
                    """, (name, role, wage)
@@ -158,7 +158,7 @@ def api_employees():
             name,
             role,
             wage
-        FROM employees
+        FROM Employees
     """)
 
     data = cursor.fetchall()
