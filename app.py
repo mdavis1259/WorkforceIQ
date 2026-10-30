@@ -12,10 +12,18 @@ app = Flask(__name__)
 # ======================================================
 
 def get_db_connection():
-    return sqlite3.connect("database/workforce.db")
+    #Uses regular database by default, but can be overridden for testing
+    database = app.config.get("DATABASE", "database/workforce.db") 
+    connection = sqlite3.connect(database)
+    connection.row_factory = sqlite3.Row #Lets us access columns by name instead of index
+    return connection
+
+# Split for testing purposes
+def get_employees_json():
+    return requests.get("http://127.0.0.1:5000/api/employees").json()
 
 def get_employee_context():
-    employees = requests.get("http://127.0.0.1:5000/api/employees").json()
+    employees = get_employees_json()
     context = "Current Employees:\n\n"
     for employee in employees:
         context += (
@@ -76,8 +84,11 @@ def login():
         username = request.form["username"]
         password = request.form["password"]
         conn = get_db_connection()
-        
-        user = authenticate_user(username, password, conn)
+
+        try:
+            user = authenticate_user(username, password, conn)
+        finally:
+            conn.close()
 
         if user:
             return redirect(url_for("dashboard"))
