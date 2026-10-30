@@ -111,7 +111,7 @@ body {
 
 .form-group input {
     width: 100%;
-    padding: 12px;
+    padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
     transition: all 0.2s ease;
@@ -122,6 +122,35 @@ body {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.15);
+}
+
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    background-color: white;
+    transition: all 0.2s ease;
+}
+
+.form-group select:focus,
+.employee-form select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.15);
+}
+
+dialog {
+    border: none;
+    padding: 0;
+    margin: auto;
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
 }
 
 /* ==========================
@@ -213,12 +242,25 @@ body {
     margin-bottom: 30px;
 }
 
-.employee-form input {
+.employee-form input,
+.employee-form select {
     padding: 10px 12px;
     margin-right: 10px;
     margin-bottom: 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
+    background-color: white;
+    font-family: inherit;
+    font-size: 15px;
+}
+
+.employee-form select {
+    min-width: 170px;
+    height: 41px;
+}
+
+.employee-form .employee-name-input {
+    min-width: 240px;
 }
 
 /* ==========================
