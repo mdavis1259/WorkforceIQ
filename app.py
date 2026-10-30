@@ -3,9 +3,13 @@ import requests
 import numpy as np
 from auth import authenticate_user
 from sklearn.linear_model import LinearRegression
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 
 app = Flask(__name__)
+app.secret_key = (
+    app.config.get("SECRET_KEY")
+    or "development-key-change-in-production"
+)
 
 # ======================================================
 # HELPER FUNCTIONS
@@ -91,11 +95,72 @@ def login():
             conn.close()
 
         if user:
+            #Save login data to session
+            session["userid"] = user["userid"]
+            session["username"] = user["username"]
+            session["level"] = user["level"]
+
+            #User sets own level
+            if user["level"] == 0:
+                return redirect(url_for("levelselect"))
+
+            #else, go to dashboard
             return redirect(url_for("dashboard"))
 
         error = "Invalid username or password."
         
     return render_template("login.html", error=error)
+
+@app.route("/levelselect", methods=["GET", "POST"])
+def levelselect():
+    # Check user logged in
+    userid = session.get("userid")
+    if userid is None:
+        return redirect(url_for("login"))
+
+    # Get level from form submission
+    if request.method == "POST":
+        try:
+            level = int(request.form["level"])
+        except (KeyError, ValueError, TypeError):
+            return render_template(
+                "levelselect.html",
+                error="Please select a valid level."
+            ), 400
+
+        if level not in (0, 1, 2):
+            return render_template(
+                "levelselect.html",
+                error="Please select a valid level."
+            ), 400
+
+
+        conn = get_db_connection()
+        conn.execute(
+            "UPDATE Users SET level = ? WHERE userid = ?",
+            (level, userid)
+        )
+        conn.commit()
+
+        updated_level = conn.execute(
+            "SELECT level FROM Users WHERE userid = ?",
+            (userid,)
+        ).fetchone()
+        conn.close()
+
+        if updated_level is None:
+            return redirect(url_for("login"))
+
+        if updated_level["level"] != level or updated_level["level"] == 0:
+            return render_template(
+                "levelselect.html",
+                error="Failed to update level. Please try again."
+            ), 500
+        
+        session["level"] = level
+        return redirect(url_for("dashboard"))
+
+    return render_template("levelselect.html")
 
 # =======================================================
 # DASHBOARD ROUTES

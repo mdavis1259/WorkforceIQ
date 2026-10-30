@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS Employees(
     name TEXT NOT NULL,
     role TEXT NOT NULL,
     wage REAL NOT NULL,
-    userid INTEGER NOT NULL,
+    userid INTEGER,
     CONSTRAINT fk_userid FOREIGN KEY (userid) REFERENCES Users(userid)
 )
 

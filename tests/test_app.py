@@ -37,7 +37,9 @@ class WorkforceIQTestCase(unittest.TestCase):
             CREATE TABLE Users(
                 userid INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
+                password TEXT NOT NULL,
+                level INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT chk_level CHECK(level IN (0, 1, 2, 3))
             );
 
             CREATE TABLE employees(
@@ -49,8 +51,8 @@ class WorkforceIQTestCase(unittest.TestCase):
         """)
 
         connection.execute(
-            "INSERT INTO Users(username, password) VALUES (?, ?)",
-            ("test", generate_password_hash("password123")),
+            "INSERT INTO Users(username, password, level) VALUES (?, ?, ?)",
+            ("test", generate_password_hash("password123"), 0),
         )
         connection.executemany(
             "INSERT INTO employees(name, role, wage) VALUES (?, ?, ?)",
