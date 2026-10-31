@@ -1,4 +1,5 @@
 import sqlite3
+from tkinter import LEFT
 import requests
 import numpy as np
 from decimal import Decimal, InvalidOperation
@@ -24,19 +25,16 @@ def get_db_connection():
     connection.row_factory = sqlite3.Row #Lets us access columns by name instead of index
     return connection
 
-# Split for testing purposes
-def get_employees_json():
-    return requests.get("http://127.0.0.1:5000/api/employees").json()
-
 def get_employee_context():
-    employees = get_employees_json()
+    employees = requests.get("http://127.0.0.1:5000/api/employees").json()
     context = "Current Employees:\n\n"
     for employee in employees:
         context += (
-            f"Name: {employee['name']}, "
+            f"Name: {employee["first_name"].strip() + ' ' + employee["last_name"].strip()}, "
             f"Role: {employee['role']}, "
-            f"Wage: ${employee['wage']}/hr\n"
+            f"Wage: ${employee["hourly_wage"]}/hr\n"
         )
+    print("Employee Context:\n" + context) #TODO: Remove this debug print statement in production
     return context
         
 def generate_forecast():
@@ -97,16 +95,16 @@ def login():
             conn.close()
 
         if user:
-            #Save login data to session
+            # Save login data to session
             session["userid"] = user["userid"]
             session["username"] = user["username"]
-            session["level"] = user["level"]
+            session["system_role_id"] = user["system_role_id"]
 
-            #User sets own level
-            if user["level"] == 0:
+            # User is unassigned, sets own level TODO: remove once login redirection is implemnnted
+            if session["system_role_id"] == 0:
                 return redirect(url_for("levelselect"))
 
-            #else, go to dashboard
+            # Else, go to dashboard
             return redirect(url_for("dashboard"))
 
         error = "Invalid username or password."
@@ -124,44 +122,45 @@ def register():
         "last_name": request.form.get("last_name", "").strip(),
         "job_title": request.form.get("job_title", "").strip(),
         "level": request.form.get("level", "").strip(),
-        "wage": request.form.get("wage", "").strip(),
+        "hourly_wage": request.form.get("hourly_wage", request.form.get("hourly_wage", "")).strip(),
     }
 
     errors = []
-    for field_name, label in (
-        ("username", "Username"),
-        ("password", "Password"),
-        ("first_name", "First name"),
-        ("last_name", "Last name"),
-        ("job_title", "Job title"),
-        ("level", "Job level"),
-        ("wage", "Wage"),
-    ):
-        # Throw error if any field is missing
-        if not fields[field_name]:
-            errors.append(f"{label} is required.")
 
-    if fields["first_name"] and any(character.isdigit() for character in fields["first_name"]):
+    if not fields["username"]:
+        errors.append("Username is required.")
+    if not fields["password"]:
+        errors.append("Password is required.")
+    if not fields["first_name"]:
+        errors.append("First name is required.")
+    elif any(character.isdigit() for character in fields["first_name"]):
         errors.append("First name must not contain numbers.")
-    if fields["last_name"] and any(character.isdigit() for character in fields["last_name"]):
+    if not fields["last_name"]:
+        errors.append("Last name is required.")
+    elif any(character.isdigit() for character in fields["last_name"]):
         errors.append("Last name must not contain numbers.")
+    if not fields["job_title"]:
+        errors.append("Job title is required.")
 
-    level_map = {"Associate": 1, "Manager": 2, "Administrator": 3}
-    level = level_map.get(fields["level"])
-    if fields["level"] and level is None:
-        errors.append("Job level must be Associate, Manager, or Administrator.")
+    level_names = {"Associate": 1, "Manager": 2, "Administrator": 3, "Admin": 3}
+    level = level_names.get(fields["level"])
+    if level is None or level not in (1, 2, 3):
+        errors.append("Please select a valid level.")
 
-    wage = None
-    if fields["wage"]:
+    hourly_wage = None
+    if fields["hourly_wage"]:
         try:
-            wage = Decimal(fields["wage"])
-            if not wage.is_finite() or wage < 0:
+            hourly_wage = Decimal(fields["hourly_wage"])
+            if not hourly_wage.is_finite() or hourly_wage < 0:
                 raise InvalidOperation
-            if wage.as_tuple().exponent < -2:
-                errors.append("Wage must have no more than 2 digits after the decimal.")
+            if hourly_wage.as_tuple().exponent < -2:
+                errors.append("Hourly wage must have no more than 2 digits after the decimal point.")
         except (InvalidOperation, ValueError):
-            errors.append("Wage must be a valid number.")
+            errors.append("Hourly wage must be a valid number.")
+    else:
+        errors.append("Hourly wage is required.")
 
+    # If errors, return to registration page with errors and pre-filled fields 
     if errors:
         return render_template(
             "login.html",
@@ -172,43 +171,69 @@ def register():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
+        # Save an existing role, or create one for this new job title.
+        role = cursor.execute(
+            "SELECT role_id FROM Roles WHERE role_name = ?",
+            (fields["job_title"].strip(),),
+        ).fetchone()
+        if role is None:
+            cursor.execute(
+                "INSERT INTO Roles (role_name, system_role_id) VALUES (?, ?)",
+                (fields["job_title"].strip(), level),
+            )
+            role_id = cursor.lastrowid
+        else:
+            role_id = role["role_id"]
+
         cursor.execute(
-            "INSERT INTO Users(username, password, level) VALUES (?, ?, ?)",
+            """
+            INSERT INTO Employees
+            (role_id, first_name, last_name, hourly_wage)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                role_id,
+                fields["first_name"],
+                fields["last_name"],
+                float(hourly_wage),
+            ),
+        )
+        employee_id = cursor.lastrowid
+
+        cursor.execute(
+            """
+            INSERT INTO Users
+            (username, password, system_role_id, employee_id)
+            VALUES (?, ?, ?, ?)
+            """,
             (
                 fields["username"],
                 generate_password_hash(fields["password"]),
                 level,
+                employee_id,
             ),
         )
         userid = cursor.lastrowid
-        cursor.execute(
-            """
-            INSERT INTO Employees(name, role, wage, userid)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                f"{fields['first_name']} {fields['last_name']}",
-                fields["job_title"],
-                float(wage),
-                userid,
-            ),
-        )
+
         conn.commit()
-    except sqlite3.IntegrityError:
+    except sqlite3.IntegrityError as error:
         conn.rollback()
+        conn.close()
         return render_template(
             "login.html",
-            registration_error="Username is already in use.",
+            registration_error=str(error),
             registration_open=True,
             registration=fields,
         ), 400
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
     session["userid"] = userid
     session["username"] = fields["username"]
-    session["level"] = level
+    session["system_role_id"] = level
     return redirect(url_for("dashboard"))
 
 @app.route("/levelselect", methods=["GET", "POST"])
@@ -283,22 +308,21 @@ def employees():
     cursor.execute(
         """
         SELECT
-            Employees.id,
-            Employees.name,
-            Employees.role,
-            Employees.wage,
+            Employees.first_name,
+            Employees.last_name,
+            Roles.role_name,
             CASE
-                WHEN Users.level = 0 THEN 'Undefined'
-                WHEN Users.level = 1 THEN 'Associate'
-                WHEN Users.level = 2 THEN 'Manager'
-                WHEN Users.level = 3 THEN 'Administrator'
-                ELSE 'Undefined'
-            END AS level_name
+                Roles.system_role_id
+                WHEN 0 THEN 'Unregistered'
+                WHEN 1 THEN 'Associate'
+                WHEN 2 THEN 'Manager'
+                WHEN 3 THEN 'Administrator'
+            END AS account_level,
+            Employees.hourly_wage
         FROM Employees
-        LEFT JOIN Users ON Users.userid = Employees.userid
+        LEFT JOIN Roles ON Roles.role_id = Employees.role_id
         """
     )
-
     employees = cursor.fetchall()
 
     conn.close()
@@ -307,29 +331,50 @@ def employees():
 
 @app.route("/add_employee", methods=["POST"])
 def add_employee():
-    name = request.form["name"]
-    role = request.form["role"]
-    wage = request.form["wage"]
+    first_name = request.form["first_name"].strip()
+    last_name = request.form["last_name"].strip()
+    role_name = request.form["role_name"].strip()
+    level = int(request.form["level"])
+    wage = request.form["wage"].strip()
     username = request.form.get("username", "").strip()
+    # TODO: Have unused username field be optional, and if provided, create a user account for the employee, providing password
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    userid = None
+    role_row = cursor.execute(
+        "SELECT role_id FROM Roles WHERE role_name = ?",
+        (role_name,),
+    ).fetchone()
+    if role_row is None:
+        cursor.execute(
+            "INSERT INTO Roles (role_name, system_role_id) VALUES (?, ?)",
+            (role_name, 1),
+        )
+        role_id = cursor.lastrowid
+    else:
+        role_id = role_row["role_id"]
+
+    cursor.execute(
+        """
+        INSERT INTO Employees
+        (role_id, first_name, last_name, hourly_wage)
+        VALUES (?, ?, ?, ?)
+        """,
+        (role_id, first_name, last_name, wage),
+    )
+    employee_id = cursor.lastrowid
+
     if username:
         user = cursor.execute(
             "SELECT userid FROM Users WHERE username = ?",
             (username,),
         ).fetchone()
         if user:
-            userid = user["userid"]
-
-    cursor.execute("""
-                   INSERT INTO Employees
-                   (name, role, wage, userid)
-                   VALUES (?, ?, ?, ?)
-                   """, (name, role, wage, userid)
-    )
+            cursor.execute(
+                "UPDATE Users SET employee_id = ? WHERE userid = ?",
+                (employee_id, user["userid"]),
+            )
 
     conn.commit()
     conn.close()
@@ -345,24 +390,23 @@ def api_employees():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT
-            name,
-            role,
-            wage
+        SELECT first_name, last_name, role_id, hourly_wage
         FROM Employees
     """)
-
-    data = cursor.fetchall()
+    results = []
+    for row in cursor.fetchall():
+        role_name = cursor.execute(
+            "SELECT role_name FROM Roles WHERE role_id = ?",
+            (row["role_id"],),
+        ).fetchone()
+        results.append({
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "role": role_name["role_name"] if role_name else None,
+            "hourly_wage": row["hourly_wage"],
+        })
 
     conn.close()
-    results = []
-    for row in data:
-        results.append({
-            "name": row[0],
-            "role": row[1],
-            "wage": row[2]
-        })        
-    
     return jsonify(results)
 
 # =========================================================

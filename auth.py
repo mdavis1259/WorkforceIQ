@@ -9,7 +9,8 @@ def authenticate_user(username, password, conn):
             userid,
             username,
             password,
-            level
+            system_role_id,
+            employee_id
         FROM Users
         WHERE username = ?
         """, (username,))

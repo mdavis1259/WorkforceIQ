@@ -13,18 +13,37 @@
 
         <input
             type="text"
-            name="name"
-            placeholder="Employee Name (required)"
+            name="first_name"
+            placeholder="First Name (required)"
             class="employee-name-input"
             required
         >
 
         <input
             type="text"
-            name="role"
-            placeholder="Role (required)"
+            name="last_name"
+            placeholder="Last Name (required)"
+            class="employee-name-input"
             required
         >
+
+        <input
+            type="text"
+            name="role_name"
+            placeholder="Job Title (required)"
+            required
+        >
+
+        <select name="level"required>
+            <option 
+                value=""
+                disabled
+                selected
+            > Select Role Level </option>
+            <option value="1">Associate</option>
+            <option value="2">Manager</option>
+            <option value="3">Administrator</option>
+        </select>
 
         <input
             type="number"
@@ -50,11 +69,11 @@
     <table>
 
         <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Role</th>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Role Name</th>
+            <th>Account Level</th>
             <th>Hourly Wage</th>
-            <th>Level</th>
         </tr>
 
         {% for emp in employees %}
@@ -63,8 +82,8 @@
             <td>{{ emp[0] }}</td>
             <td>{{ emp[1] }}</td>
             <td>{{ emp[2] }}</td>
-            <td>${{ "%.2f"|format(emp[3]) }}</td>
-            <td>{{ emp[4] }}</td>
+            <td>{{ emp[3] }}</td>
+            <td>${{ "%.2f"|format(emp[4]) }}</td>
         </tr>
 
         {% endfor %}

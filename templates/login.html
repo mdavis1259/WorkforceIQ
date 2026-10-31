@@ -99,9 +99,9 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <input id="wage" type="number" name="wage" min="0" step="0.01"
+                        <input id="hourly_wage" type="number" name="hourly_wage" min="0" step="0.01"
                             placeholder="Hourly Wage"
-                            value="{{ registration.wage if registration else '' }}" required>
+                            value="{{ registration.hourly_wage if registration else '' }}" required>
                     </div>
                     <button type="submit" class="btn">Submit Registration</button>
                     <button type="button" class="btn" id="close-registration" style="margin-top: 12px;">
