@@ -7,12 +7,26 @@ from auth import authenticate_user
 from sklearn.linear_model import LinearRegression
 from werkzeug.security import generate_password_hash
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
 app = Flask(__name__)
 app.secret_key = (
     app.config.get("SECRET_KEY")
     or "development-key-change-in-production"
 )
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+
+
+class User(UserMixin):
+    def __init__(self, userid, username, system_role_id, employee_id=None):
+        self.id = userid
+        self.userid = userid
+        self.username = username
+        self.system_role_id = system_role_id
+        self.employee_id = employee_id
 
 # ======================================================
 # HELPER FUNCTIONS
@@ -74,15 +88,41 @@ def ask_ollama(prompt):
 # =====================================================
 
 # =====================================================
+# LOGIN MANAGER
+# =====================================================
+@login_manager.user_loader
+def load_user(user_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM Users WHERE userid = ?",
+        (user_id,)
+    )
+    user = cursor.fetchone()
+    conn.close()
+    if user is None:
+        return None
+    return User(
+        userid=user["userid"],
+        username=user["username"],
+        system_role_id=user["system_role_id"],
+        employee_id=user["employee_id"],
+    )
+
+# =====================================================
 # AUTHENTICATION ROUTES
 # =====================================================
-
 @app.route("/")
 def home():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
     return redirect(url_for("login"))
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+
     error = None
     if request.method == "POST":
         username = request.form["username"]
@@ -95,14 +135,17 @@ def login():
             conn.close()
 
         if user:
-            # Save login data to session
-            session["userid"] = user["userid"]
-            session["username"] = user["username"]
-            session["system_role_id"] = user["system_role_id"]
+            authenticated_user = User(
+                userid=user["userid"],
+                username=user["username"],
+                system_role_id=user["system_role_id"],
+                employee_id=user["employee_id"],
+            )
+            login_user(authenticated_user)
 
             # User is unassigned, sets own level TODO: remove once login redirection is implemnnted
-            if session["system_role_id"] == 0:
-                return redirect(url_for("levelselect"))
+            if authenticated_user.system_role_id == 0:
+                return redirect(url_for("level_select"))
 
             # Else, go to dashboard
             return redirect(url_for("dashboard"))
@@ -234,14 +277,26 @@ def register():
     session["userid"] = userid
     session["username"] = fields["username"]
     session["system_role_id"] = level
+    login_user(User(
+        userid=userid,
+        username=fields["username"],
+        system_role_id=level,
+        employee_id=employee_id,
+    ))
     return redirect(url_for("dashboard"))
 
-@app.route("/levelselect", methods=["GET", "POST"])
-def levelselect():
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    session.clear()
+    return redirect(url_for("login"))
+
+@app.route("/level_select", methods=["GET", "POST"])
+@login_required
+def level_select():
     # Check user logged in
-    userid = session.get("userid")
-    if userid is None:
-        return redirect(url_for("login"))
+    userid = current_user.userid
 
     # Get level from form submission
     if request.method == "POST":
@@ -249,26 +304,26 @@ def levelselect():
             level = int(request.form["level"])
         except (KeyError, ValueError, TypeError):
             return render_template(
-                "levelselect.html",
+                "level_select.html",
                 error="Please select a valid level."
             ), 400
 
         if level not in (0, 1, 2):
             return render_template(
-                "levelselect.html",
+                "level_select.html",
                 error="Please select a valid level."
             ), 400
 
 
         conn = get_db_connection()
         conn.execute(
-            "UPDATE Users SET level = ? WHERE userid = ?",
+            "UPDATE Users SET system_role_id = ? WHERE userid = ?",
             (level, userid)
         )
         conn.commit()
 
         updated_level = conn.execute(
-            "SELECT level FROM Users WHERE userid = ?",
+            "SELECT system_role_id FROM Users WHERE userid = ?",
             (userid,)
         ).fetchone()
         conn.close()
@@ -276,22 +331,24 @@ def levelselect():
         if updated_level is None:
             return redirect(url_for("login"))
 
-        if updated_level["level"] != level or updated_level["level"] == 0:
+        if updated_level["system_role_id"] != level or updated_level["system_role_id"] == 0:
             return render_template(
-                "levelselect.html",
+                "level_select.html",
                 error="Failed to update level. Please try again."
             ), 500
         
-        session["level"] = level
+        session["system_role_id"] = level
+        current_user.system_role_id = level
         return redirect(url_for("dashboard"))
 
-    return render_template("levelselect.html")
+    return render_template("level_select.html")
 
 # =======================================================
 # DASHBOARD ROUTES
 # =======================================================
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
     """ Displays the WorkforceIQ manager dashboard """
     return render_template("dashboard.html")
@@ -301,6 +358,7 @@ def dashboard():
 # =======================================================
 
 @app.route("/employees")
+@login_required
 def employees():
     """ Displays a table with employee information """
     conn = get_db_connection()
@@ -330,6 +388,7 @@ def employees():
     return render_template("employees.html", employees=employees)
 
 @app.route("/add_employee", methods=["POST"])
+@login_required
 def add_employee():
     first_name = request.form["first_name"].strip()
     last_name = request.form["last_name"].strip()
@@ -375,6 +434,20 @@ def add_employee():
                 "UPDATE Users SET employee_id = ? WHERE userid = ?",
                 (employee_id, user["userid"]),
             )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO Users
+                (username, password, system_role_id, employee_id)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    username,
+                    generate_password_hash("password"),
+                    level,
+                    employee_id,
+                ),
+            )
 
     conn.commit()
     conn.close()
@@ -414,6 +487,7 @@ def api_employees():
 # =========================================================
 
 @app.route("/ai", methods=["GET", "POST"])
+@login_required
 def ai_assistant():
     response = ""
 
@@ -442,6 +516,7 @@ def ai_assistant():
     return render_template("ai_assistant.html", response=response)
 
 @app.route("/forecast")
+@login_required
 def forecast():
 
     predicted_demand = generate_forecast()
