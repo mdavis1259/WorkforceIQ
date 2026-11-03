@@ -351,7 +351,7 @@ def level_select():
 @login_required
 def dashboard():
     """ Displays the WorkforceIQ manager dashboard """
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", level = current_user.system_role_id)
 
 # =======================================================
 # EMPLOYEE MANAGEMENT ROUTES
