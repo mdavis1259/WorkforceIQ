@@ -413,7 +413,7 @@ def employees():
 
     conn.close()
 
-    return render_template("employees.html", employees=employees)
+    return render_template("employees.html", employees=employees, restricted=(current_user.system_role_id == 1))
 
 #TODO: 400 call with errors when adding employee fails, and display errors on the page
 @app.route("/add_employee", methods=["POST"])

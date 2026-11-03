@@ -113,8 +113,8 @@ cursor.executemany(
     VALUES (?, ?, ?, ?)
     """,
     [
-        ('april', generate_password_hash('password123'), 1, 1),
-        ('bob', generate_password_hash('password123'), 2, 2),
+        ('april', generate_password_hash('password'), 1, 1),
+        ('bob', generate_password_hash('password'), 2, 2),
         ('admin', generate_password_hash('password'), 3, 3),
     ],
 )
