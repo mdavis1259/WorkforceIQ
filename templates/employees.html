@@ -83,7 +83,13 @@
             <td>{{ emp[1] }}</td>
             <td>{{ emp[2] }}</td>
             <td>{{ emp[3] }}</td>
-            <td>${{ "%.2f"|format(emp[4]) }}</td>
+            <td>
+                {% if emp[4] is not none %}
+                    ${{ "%.2f"|format(emp[4]) }}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
         </tr>
 
         {% endfor %}

@@ -67,39 +67,57 @@ CREATE TABLE IF NOT EXISTS Users(
 """)
 
 # Create system roles, keep for final version
-cursor.execute("""
-INSERT INTO SystemRoles (system_role_id, role_name, description)
+cursor.executemany(
+    """
+    INSERT INTO SystemRoles (system_role_id, role_name, description)
     VALUES
+        (?, ?, ?)
+    """,
+    [
         (0, 'Unregistered', 'Unregistered user with no access'),
         (1, 'Associate', 'Regular employee with limited access'),
         (2, 'Manager', 'Manager with view of Employees and ability to make schedules'),
         (3, 'Administrator', 'Administrator with full access')
-""")
+    ]
+)
 
 # Temporary roles for proof-of-concept, can be removed later
-cursor.execute("""
+cursor.executemany(
+    """
     INSERT INTO Roles (role_name, system_role_id)
     VALUES
+        (?, ?)
+    """,
+    [
         ('Example Associate', 1),
         ('Example Manager', 2),
         ('Example Administrator', 3)
-""")
+    ]
+)
 
-cursor.execute("""
+cursor.executemany(
+    """
     INSERT INTO Employees (role_id, first_name, last_name, hourly_wage)
-    VALUES
+    VALUES (?, ?, ?, ?)
+    """,
+    [
         (1, 'April', 'Associate', 15.00),
         (2, 'Bob', 'Manager', 20.00),
         (3, 'Charlie', 'Administrator', 25.00)
-""")
+    ],
+)
 
-cursor.execute("""
+cursor.executemany(
+    """
     INSERT INTO Users (username, password, system_role_id, employee_id)
-    VALUES
-        ('april', 'password123', 1, 1),
-        ('bob', 'password123', 2, 2),
-        ('admin', 'password', 3, 3)
-""")
+    VALUES (?, ?, ?, ?)
+    """,
+    [
+        ('april', generate_password_hash('password123'), 1, 1),
+        ('bob', generate_password_hash('password123'), 2, 2),
+        ('admin', generate_password_hash('password'), 3, 3),
+    ],
+)
 conn.commit()
 conn.close()
 
