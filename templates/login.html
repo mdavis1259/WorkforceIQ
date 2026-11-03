@@ -16,19 +16,111 @@
 		</div>
 		{% endif %}
 
-                <form method="POST">
+                <form action="{{ url_for('login') }}" method="POST">
                     <div class="form-group">
                         <label>Username</label>
-                        <input type="text" name="username" required>
+                        <input
+                            type="text"
+                            name="username"
+                            placeholder="Username"
+                            required
+                        >
                     </div>
                     <div class="form-group">
                         <label>Password</label>
-                        <input type="password" name="password" required>
+                        <input
+                            type="password"
+                            name="password"
+                            placeholder="Password"
+                            required
+                        >
                     </div>
                     <button type="submit" class="btn">
                         Login
                     </button>
                 </form>
+
+                <button
+                    type="button"
+                    class="btn"
+                    id="open-registration"
+                    style="margin-top: 12px;"
+                >
+                    Create Account
+                </button>
             </div>
         </div>
+
+        <dialog id="registration-dialog" aria-labelledby="registration-title">
+            <div class="login-card" style="width: 520px; max-width: calc(100vw - 40px);">
+                <h1 id="registration-title">Create Account</h1>
+
+                {% if registration_error %}
+                <div class="error-message">{{ registration_error }}</div>
+                {% endif %}
+
+                <form
+                    action="{{ url_for('register') }}"
+                    method="POST"
+                    class="registration-form"
+                >
+                    <div class="form-group">
+                        <input id="register-username" type="text" name="username"
+                            placeholder="Username"
+                            value="{{ registration.username if registration else '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <input id="register-password" type="password" name="password"
+                            placeholder="Password" required>
+                    </div>
+                    <div class="form-group">
+                        <input id="first-name" type="text" name="first_name"
+                            pattern="[^0-9]*"
+                            placeholder="First name"
+                            value="{{ registration.first_name if registration else '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <input id="last-name" type="text" name="last_name"
+                            pattern="[^0-9]*"
+                            placeholder="Last name"
+                            value="{{ registration.last_name if registration else '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <input id="job-title" type="text" name="job_title"
+                            placeholder="Job title"
+                            value="{{ registration.job_title if registration else '' }}" required>
+                    </div>
+                    <div class="form-group">
+                        <select id="job-level" name="level" required>
+                            <option value="">Select a level</option>
+                            <option value="Associate" {% if registration and registration.level == 'Associate' %}selected{% endif %}>Associate</option>
+                            <option value="Manager" {% if registration and registration.level == 'Manager' %}selected{% endif %}>Manager</option>
+                            <option value="Administrator" {% if registration and registration.level == 'Administrator' %}selected{% endif %}>Administrator</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <input id="hourly_wage" type="number" name="hourly_wage" min="0" step="0.01"
+                            placeholder="Hourly Wage"
+                            value="{{ registration.hourly_wage if registration else '' }}" required>
+                    </div>
+                    <button type="submit" class="btn">Submit Registration</button>
+                    <button type="button" class="btn" id="close-registration" style="margin-top: 12px;">
+                        Cancel
+                    </button>
+                </form>
+            </div>
+        </dialog>
+
+        <script>
+            const registrationDialog = document.getElementById("registration-dialog");
+            document.getElementById("open-registration").addEventListener("click", () => {
+                registrationDialog.showModal();
+            });
+            document.getElementById("close-registration").addEventListener("click", () => {
+                registrationDialog.close();
+            });
+            {% if registration_open %}
+                registrationDialog.showModal();
+            {% endif %}
+        </script>
 </html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WorkforceIQ</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <div class="dashboard">
+    <h1>Select Your Level</h1>
+
+    {% if error %}
+    <div class="error-message">{{ error }}</div>
+    {% endif %}
+
+    <form action="{{ url_for('level_select') }}" method="POST">
+        <button type="submit" name="level" value="2" class="btn">
+            Manager
+        </button>
+        <br>
+        <br>
+        <button type="submit" name="level" value="1" class="btn">
+            Associate
+        </button>
+    </form>
+</div>
+    </main>
+    <footer class="footer">
+         WorkforceIQ Proof of Concept
+    </footer>
+</body>
+</html>

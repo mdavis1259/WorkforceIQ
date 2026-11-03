@@ -6,8 +6,11 @@ def authenticate_user(username, password, conn):
     cursor = conn.cursor()
     cursor.execute("""
         SELECT
+            userid,
             username,
-            password
+            password,
+            system_role_id,
+            employee_id
         FROM Users
         WHERE username = ?
         """, (username,))
@@ -17,7 +20,7 @@ def authenticate_user(username, password, conn):
     if not user:
         return None
 
-    if check_password_hash(user[1], password):
+    if check_password_hash(user["password"], password):
         return user
 
     return None

@@ -37,23 +37,26 @@ class WorkforceIQTestCase(unittest.TestCase):
             CREATE TABLE Users(
                 userid INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
+                password TEXT NOT NULL,
+                level INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT chk_level CHECK(level IN (0, 1, 2, 3))
             );
 
-            CREATE TABLE employees(
+            CREATE TABLE Employees(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 role TEXT NOT NULL,
-                wage REAL NOT NULL
+                wage REAL NOT NULL,
+                userid INTEGER
             );
         """)
 
         connection.execute(
-            "INSERT INTO Users(username, password) VALUES (?, ?)",
-            ("test", generate_password_hash("password123")),
+            "INSERT INTO Users(username, password, level) VALUES (?, ?, ?)",
+            ("test", generate_password_hash("password123"), 1),
         )
         connection.executemany(
-            "INSERT INTO employees(name, role, wage) VALUES (?, ?, ?)",
+            "INSERT INTO Employees(name, role, wage) VALUES (?, ?, ?)",
             [
                 ("Alice Example", "Manager", 30.0),
                 ("Bob Example", "Associate", 20.0),
@@ -167,6 +170,58 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Invalid username or password.", response.data)
 
+    def test_registration_creates_user_and_employee(self):
+        response = self.client.post(
+            "/register",
+            data={
+                "username": "newuser",
+                "password": "password123",
+                "first_name": "Robbie",
+                "last_name": "Example",
+                "job_title": "Shift Supervisor",
+                "level": "Manager",
+                "wage": "28.50",
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/dashboard")
+
+        connection = sqlite3.connect(self.database_path)
+        user = connection.execute(
+            "SELECT userid, level FROM Users WHERE username = ?",
+            ("newuser",),
+        ).fetchone()
+        employee = connection.execute(
+            "SELECT name, role, wage, userid FROM Employees WHERE userid = ?",
+            (user[0],),
+        ).fetchone()
+        connection.close()
+
+        self.assertEqual(user[1], 2)
+        self.assertEqual(employee, ("Robbie Example", "Shift Supervisor", 28.5, user[0]))
+
+    def test_registration_rejects_invalid_fields(self):
+        response = self.client.post(
+            "/register",
+            data={
+                "username": "",
+                "password": "",
+                "first_name": "Dana2",
+                "last_name": "3Example",
+                "job_title": "",
+                "level": "Associate",
+                "wage": "12.345",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b"Username is required.", response.data)
+        self.assertIn(b"First name must not contain numbers.", response.data)
+        self.assertIn(b"Last name must not contain numbers.", response.data)
+        self.assertIn(b"no more than 2 digits", response.data)
+
     # Check that the employee API returns the pre-set data from create_test_database
     def test_employee_api_returns_pre_set_data(self):
         response = self.client.get("/api/employees")
@@ -186,6 +241,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 "name": "Dana Example",
                 "role": "Supervisor",
                 "wage": "28.0",
+                "username": "test",
             },
             follow_redirects=False,
         )
@@ -194,12 +250,16 @@ class WorkforceIQTestCase(unittest.TestCase):
 
         connection = sqlite3.connect(self.database_path)
         dana_example = connection.execute(
-            "SELECT name, role, wage FROM employees WHERE name = ?",
+            "SELECT name, role, wage, userid FROM Employees WHERE name = ?",
             ("Dana Example",),
         ).fetchone()
         connection.close()
 
-        self.assertEqual(dana_example, ("Dana Example", "Supervisor", 28.0))
+        self.assertEqual(dana_example, ("Dana Example", "Supervisor", 28.0, 1))
+
+        response = self.client.get("/employees")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Associate", response.data)
 
     # TODO: change test when data isn't hardcoded and forecast() is implemented
     def test_forecast_accuracy(self):

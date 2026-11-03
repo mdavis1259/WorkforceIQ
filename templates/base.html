@@ -11,6 +11,10 @@
         <a href="{{ url_for('employees') }}">Employees</a>
         <a href="{{ url_for('forecast') }}">Forecast</a>
         <a href="{{ url_for('ai_assistant') }}">AI Assistant</a>
+        {% if current_user.is_authenticated %}
+        <span class="navbar-username">{{ current_user.username }}</span>
+        <a href="{{ url_for('logout') }}" class="navbar-logout">Logout</a>
+        {% endif %}
     </nav>
 
     <main class="container">
