@@ -10,6 +10,8 @@ cursor = conn.cursor()
 
 # Drop existing tables
 # TODO: remove later, only for development purposes
+cursor.execute("DROP TABLE IF EXISTS EmployeeQualifications")
+cursor.execute("DROP TABLE IF EXISTS Qualifications")
 cursor.execute("DROP TABLE IF EXISTS SystemRoles")
 cursor.execute("DROP TABLE IF EXISTS Roles")
 cursor.execute("DROP TABLE IF EXISTS Employees")
@@ -45,6 +47,29 @@ CREATE TABLE IF NOT EXISTS Employees(
     CONSTRAINT fk_role_id
         FOREIGN KEY (role_id)
         REFERENCES Roles(role_id)
+)
+""")
+
+# US-3: Qualifications (certifications/skills an employee can hold)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Qualifications(
+    qualification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    qualification_name TEXT NOT NULL UNIQUE
+)
+""")
+
+# US-3: Many-to-many link between EMployees and Qualifications
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS EmployeeQualifications(
+    employee_id INTEGER NOT NULL,
+    qualification_id INTERGER NOT NULL,
+    PRIMARY KEY (employee_id, qualification_id),
+    CONSTRAINT fk_eq_employee
+        FOREIGN KEY (employee_id)
+        REFERENCES Employees (employee_id)
+    CONSTRAINT fk_eq_qualification
+        FOREIGN KEY (qualification_id)
+        REFERENCES Qualifications(qualification_id)
 )
 """)
 
@@ -91,6 +116,24 @@ cursor.execute("""
         (1, 'April', 'Associate', 15.00),
         (2, 'Bob', 'Manager', 20.00),
         (3, 'Charlie', 'Administrator', 25.00)
+""")
+
+cursor.execute("""
+INSERT INTO Qualifications (qualification_name)
+    VALUES
+        ('Food Handler Certified'),
+        ('Cash Handling'),
+        ('Opening Shift'),
+        ('Closing Shift'),
+        ('First Aid / CPR')
+""")
+
+cursor.execute("""
+INSERT INTO EmployeeQualifications (employee_id, qualification_id)
+    VALUES
+        (1, 1), (1, 2),
+        (2, 1), (2, 2), (2, 3), (2, 4),
+        (3, 5)
 """)
 
 cursor.execute("""
