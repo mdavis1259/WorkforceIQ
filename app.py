@@ -351,7 +351,7 @@ def level_select():
 @login_required
 def dashboard():
     """ Displays the WorkforceIQ manager dashboard """
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", level = current_user.system_role_id)
 
 # =======================================================
 # EMPLOYEE MANAGEMENT ROUTES
@@ -366,6 +366,7 @@ def employees():
     cursor.execute(
         """
         SELECT
+            Employees.employee_id,
             Employees.first_name,
             Employees.last_name,
             Roles.role_name,
@@ -376,17 +377,45 @@ def employees():
                 WHEN 2 THEN 'Manager'
                 WHEN 3 THEN 'Administrator'
             END AS account_level,
+            Roles.system_role_id,
             Employees.hourly_wage
         FROM Employees
         LEFT JOIN Roles ON Roles.role_id = Employees.role_id
         """
     )
-    employees = cursor.fetchall()
+
+    # Shows wage of employees based on the current user's access level
+    employees = []
+    for row in cursor.fetchall():
+        employee_id = row["employee_id"]
+        account_level = row["system_role_id"]
+        hourly_wage = None
+
+        # Admins see all
+        if current_user.system_role_id == 3:
+            hourly_wage = row["hourly_wage"]
+        # Managers see their own wage and Associates wages
+        elif current_user.system_role_id == 2:
+            if account_level == 1 or employee_id == current_user.employee_id:
+                hourly_wage = row["hourly_wage"]
+        # Associates only see their own wage
+        elif employee_id == current_user.employee_id:
+            hourly_wage = row["hourly_wage"]
+
+        # Add data to employees to be put into the table
+        employees.append((
+            row["first_name"],
+            row["last_name"],
+            row["role_name"],
+            row["account_level"],
+            hourly_wage,
+        ))
 
     conn.close()
 
-    return render_template("employees.html", employees=employees)
+    return render_template("employees.html", employees=employees, restricted=(current_user.system_role_id == 1))
 
+#TODO: 400 call with errors when adding employee fails, and display errors on the page
 @app.route("/add_employee", methods=["POST"])
 @login_required
 def add_employee():
@@ -394,9 +423,8 @@ def add_employee():
     last_name = request.form["last_name"].strip()
     role_name = request.form["role_name"].strip()
     level = int(request.form["level"])
-    wage = request.form["wage"].strip()
+    hourly_wage = request.form["wage"].strip()
     username = request.form.get("username", "").strip()
-    # TODO: Have unused username field be optional, and if provided, create a user account for the employee, providing password
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -408,7 +436,7 @@ def add_employee():
     if role_row is None:
         cursor.execute(
             "INSERT INTO Roles (role_name, system_role_id) VALUES (?, ?)",
-            (role_name, 1),
+            (role_name, level),
         )
         role_id = cursor.lastrowid
     else:
@@ -420,7 +448,7 @@ def add_employee():
         (role_id, first_name, last_name, hourly_wage)
         VALUES (?, ?, ?, ?)
         """,
-        (role_id, first_name, last_name, wage),
+        (role_id, first_name, last_name, hourly_wage),
     )
     employee_id = cursor.lastrowid
 

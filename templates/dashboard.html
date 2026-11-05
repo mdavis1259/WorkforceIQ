@@ -11,22 +11,43 @@
     <div class="module-grid">
 
         <div class="module-card">
-            <h2>Employee Management</h2>
-            <p>Add, modify, and maintain employee records.</p>
+            <h2>{% if level == 1 %}View Schedule{% else %}Manage Schedule{% endif %}</h2>
+            <p>{% if level == 1 %}View the upcoming schedule.{% else %}Create and modify the schedule.{% endif %}</p>
+        <p> UNDER CONSTRUCTION</p>
+            <button class="btn">Open Module</button>
+        </div>
+
+        <div class="module-card">
+            <h2>Submit Availability</h2>
+            <p>Submit your availability for the upcoming period.</p>
+        <p> UNDER CONSTRUCTION</p>
+            <button class="btn">Open Module</button>
+        </div>
+
+        <div class="module-card">
+            <h2>{% if level == 1 %}Employee Directory{% else %}Employee Management{% endif %}</h2>
+            <p>{% if level == 1 %}View employee directory.{% else %}Add, modify, and maintain employee records.{% endif %}</p>
             <a href="/employees">
                 <button class="btn">Open Module</button>
             </a>
         </div>
 
-        <div class="module-card">
+        <div class="module-card" {% if level != 3 %}hidden{% endif %}>
+            <h2>User Management</h2>
+            <p>Manage user accounts and permissions.</p>
+        <p> UNDER CONSTRUCTION</p>
+            <button class="btn">Open Module</button>
+        </div>
+
+        <div class="module-card" {% if level == 1 %}hidden{% endif %}>
             <h2>Forecasting</h2>
-            <p>Forecast sales and project labor cost.</p>
+            <p>Enter historical data to forecast sales and project labor cost.</p>
 	    <a href="/forecast">
                 <button class="btn">Open Module</button>
 	    </a>
         </div>
 
-        <div class="module-card">
+        <div class="module-card" {% if level == 1 %}hidden{% endif %}>
             <h2>Reports</h2>
             <p>Review labor, productivity, and sales reports.</p>
 	    <p>UNDER CONSTRUCTION</p>
@@ -35,7 +56,7 @@
 
         <div class="module-card">
             <h2>AI Assistant</h2>
-            <p>Ask workforce planning questions.</p>
+            <p>{% if level == 1 %}Ask scheduling questions.{% else %}Ask workforce planning questions.{% endif %}</p>
 	    <a href="/ai">
                 <button class="btn">Open Module</button>
 	    </a>
