@@ -13,55 +13,87 @@ from app import app
 # Navigate to the project root directory and run:
 # python -m unittest discover -s tests -p "test_*.py"
 
+
 class WorkforceIQTestCase(unittest.TestCase):
     def setUp(self):
-        #Makes temp directory, gets path to it
+        # Makes temp directory, gets path to it
         self.temp_directory = tempfile.TemporaryDirectory()
         self.database_path = os.path.join(self.temp_directory.name, "testing.db")
 
-        #Set app to testing mode, and override the database path to the temp database
+        # Set app to testing mode, and override the database path to the temp database
         app.config.update(TESTING=True, DATABASE=self.database_path)
         self.create_test_database()
         self.client = app.test_client()
 
     def tearDown(self):
-        #Ends testing mode, resets database path to default, and cleans up temp directory
+        # Ends testing mode, resets database path to default, and cleans up temp directory
         app.config["TESTING"] = False
         app.config["DATABASE"] = os.path.join("database", "workforce.db")
         self.temp_directory.cleanup()
 
     def create_test_database(self):
+        """Builds the same tables as database/init_db.py, with sample rows."""
         connection = sqlite3.connect(self.database_path)
 
         connection.executescript("""
+            CREATE TABLE SystemRoles(
+                system_role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL UNIQUE,
+                description TEXT
+            );
+
+            CREATE TABLE Roles(
+                role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_name TEXT NOT NULL UNIQUE,
+                system_role_id INTEGER NOT NULL,
+                FOREIGN KEY (system_role_id) REFERENCES SystemRoles(system_role_id)
+            );
+
+            CREATE TABLE Employees(
+                employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role_id INTEGER NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                hourly_wage REAL NOT NULL,
+                FOREIGN KEY (role_id) REFERENCES Roles(role_id)
+            );
+
             CREATE TABLE Users(
                 userid INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
-                level INTEGER NOT NULL DEFAULT 0,
-                CONSTRAINT chk_level CHECK(level IN (0, 1, 2, 3))
-            );
-
-            CREATE TABLE Employees(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                role TEXT NOT NULL,
-                wage REAL NOT NULL,
-                userid INTEGER
+                system_role_id INTEGER NOT NULL DEFAULT 0,
+                employee_id INTEGER NOT NULL,
+                FOREIGN KEY (system_role_id) REFERENCES SystemRoles(system_role_id),
+                FOREIGN KEY (employee_id) REFERENCES Employees(employee_id)
             );
         """)
 
-        connection.execute(
-            "INSERT INTO Users(username, password, level) VALUES (?, ?, ?)",
-            ("test", generate_password_hash("password123"), 1),
+        connection.executemany(
+            "INSERT INTO SystemRoles(system_role_id, role_name, description) VALUES (?, ?, ?)",
+            [
+                (0, "Unregistered", "No access"),
+                (1, "Associate", "Limited access"),
+                (2, "Manager", "Can manage employees"),
+                (3, "Administrator", "Full access"),
+            ],
         )
         connection.executemany(
-            "INSERT INTO Employees(name, role, wage) VALUES (?, ?, ?)",
+            "INSERT INTO Roles(role_name, system_role_id) VALUES (?, ?)",
+            [("Manager", 2), ("Associate", 1)],
+        )
+        connection.executemany(
+            "INSERT INTO Employees(role_id, first_name, last_name, hourly_wage) VALUES (?, ?, ?, ?)",
             [
-                ("Alice Example", "Manager", 30.0),
-                ("Bob Example", "Associate", 20.0),
-                ("Carol Example", "Associate", 22.5),
+                (1, "Alice", "Example", 30.0),
+                (2, "Bob", "Example", 20.0),
+                (2, "Carol", "Example", 22.5),
             ],
+        )
+        # The "test" login belongs to Bob (an Associate)
+        connection.execute(
+            "INSERT INTO Users(username, password, system_role_id, employee_id) VALUES (?, ?, ?, ?)",
+            ("test", generate_password_hash("password123"), 1, 2),
         )
 
         connection.commit()
@@ -96,27 +128,13 @@ class WorkforceIQTestCase(unittest.TestCase):
 
         self.assertEqual(expected_result[0], actual_result["name"])
 
-    def test_get_employees_json(self):
-        preset_employees = [
-            {"name": "Alice Example", "role": "Manager", "wage": 30.0},
-            {"name": "Bob Example", "role": "Associate", "wage": 20.0},
-            {"name": "Carol Example", "role": "Associate", "wage": 22.5},
-        ]
-
-        # Mock version of requests.get to return preset_employees when called
-        with patch.object(app_module.requests, "get") as mock_get:
-            # Get both sets of employees as json
-            mock_get.return_value.json.return_value = preset_employees
-            employees_json = app_module.get_employees_json()
-
-        self.assertEqual(employees_json, preset_employees)
-
-    # Checks that the string from get_employee_context contains the correct data
+    # Checks that the string from get_employee_context contains the correct data.
+    # (get_employees_json() no longer exists, so requests.get is mocked directly.)
     def test_get_employee_context_string(self):
         preset_employees = [
-            {"name": "Alice Example", "role": "Manager", "wage": 30.0},
-            {"name": "Bob Example", "role": "Associate", "wage": 20.0},
-            {"name": "Carol Example", "role": "Associate", "wage": 22.5},
+            {"first_name": "Alice", "last_name": "Example", "role": "Manager", "hourly_wage": 30.0},
+            {"first_name": "Bob", "last_name": "Example", "role": "Associate", "hourly_wage": 20.0},
+            {"first_name": "Carol", "last_name": "Example", "role": "Associate", "hourly_wage": 22.5},
         ]
 
         with patch.object(app_module.requests, "get") as mock_get:
@@ -145,11 +163,11 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(actual_response, expected_response)
 
     # TODO: test ai_assistant() for hallucination
-    
+
     # Check that the login page loads successfully
     def test_login_page_loads(self):
         response = self.client.get("/login")
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Login", response.data)
 
@@ -170,6 +188,13 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Invalid username or password.", response.data)
 
+    # Check that pages other than login/register send signed-out users to /login
+    def test_pages_require_login(self):
+        for path in ("/dashboard", "/employees", "/forecast", "/ai"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 302, msg=path)
+            self.assertIn("/login", response.location, msg=path)
+
     def test_registration_creates_user_and_employee(self):
         response = self.client.post(
             "/register",
@@ -180,7 +205,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 "last_name": "Example",
                 "job_title": "Shift Supervisor",
                 "level": "Manager",
-                "wage": "28.50",
+                "hourly_wage": "28.50",
             },
             follow_redirects=False,
         )
@@ -190,17 +215,24 @@ class WorkforceIQTestCase(unittest.TestCase):
 
         connection = sqlite3.connect(self.database_path)
         user = connection.execute(
-            "SELECT userid, level FROM Users WHERE username = ?",
+            "SELECT userid, system_role_id FROM Users WHERE username = ?",
             ("newuser",),
         ).fetchone()
         employee = connection.execute(
-            "SELECT name, role, wage, userid FROM Employees WHERE userid = ?",
+            """
+            SELECT Employees.first_name, Employees.last_name,
+                   Roles.role_name, Employees.hourly_wage
+            FROM Users
+            JOIN Employees ON Employees.employee_id = Users.employee_id
+            JOIN Roles ON Roles.role_id = Employees.role_id
+            WHERE Users.userid = ?
+            """,
             (user[0],),
         ).fetchone()
         connection.close()
 
-        self.assertEqual(user[1], 2)
-        self.assertEqual(employee, ("Robbie Example", "Shift Supervisor", 28.5, user[0]))
+        self.assertEqual(user[1], 2)  # "Manager" is system role 2
+        self.assertEqual(employee, ("Robbie", "Example", "Shift Supervisor", 28.5))
 
     def test_registration_rejects_invalid_fields(self):
         response = self.client.post(
@@ -212,15 +244,41 @@ class WorkforceIQTestCase(unittest.TestCase):
                 "last_name": "3Example",
                 "job_title": "",
                 "level": "Associate",
-                "wage": "12.345",
+                "hourly_wage": "12.345",
             },
         )
 
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"Username is required.", response.data)
+        self.assertIn(b"Password is required.", response.data)
         self.assertIn(b"First name must not contain numbers.", response.data)
         self.assertIn(b"Last name must not contain numbers.", response.data)
+        self.assertIn(b"Job title is required.", response.data)
         self.assertIn(b"no more than 2 digits", response.data)
+
+    def test_registration_rejects_duplicate_username(self):
+        response = self.client.post(
+            "/register",
+            data={
+                "username": "test",  # already exists in create_test_database
+                "password": "password123",
+                "first_name": "Robbie",
+                "last_name": "Example",
+                "job_title": "Cashier",
+                "level": "Associate",
+                "hourly_wage": "15.00",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+        # The failed registration must not leave a half-created employee behind
+        connection = sqlite3.connect(self.database_path)
+        count = connection.execute(
+            "SELECT COUNT(*) FROM Employees WHERE first_name = ?", ("Robbie",)
+        ).fetchone()[0]
+        connection.close()
+        self.assertEqual(count, 0)
 
     # Check that the employee API returns the pre-set data from create_test_database
     def test_employee_api_returns_pre_set_data(self):
@@ -229,33 +287,48 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         employees = response.get_json()
         self.assertEqual(len(employees), 3)
-        self.assertEqual(employees[0]["name"], "Alice Example")
-        self.assertAlmostEqual(employees[1]["wage"], 20.0)
+        self.assertEqual(employees[0]["first_name"], "Alice")
+        self.assertEqual(employees[0]["last_name"], "Example")
+        self.assertAlmostEqual(employees[1]["hourly_wage"], 20.0)
         self.assertEqual(employees[2]["role"], "Associate")
 
-
     def test_employee_can_be_added_to_testing_database(self):
+        self.login_as_test_user()  # /add_employee and /employees require login
+
         response = self.client.post(
             "/add_employee",
             data={
-                "name": "Dana Example",
-                "role": "Supervisor",
+                "first_name": "Dana",
+                "last_name": "Example",
+                "role_name": "Supervisor",
+                "level": "2",
                 "wage": "28.0",
                 "username": "test",
             },
             follow_redirects=False,
         )
 
-        self.assertEqual(response.status_code, 302) # Check that the response is a redirect
+        self.assertEqual(response.status_code, 302)  # Check that the response is a redirect
 
         connection = sqlite3.connect(self.database_path)
         dana_example = connection.execute(
-            "SELECT name, role, wage, userid FROM Employees WHERE name = ?",
-            ("Dana Example",),
+            """
+            SELECT Employees.first_name, Employees.last_name,
+                   Roles.role_name, Employees.hourly_wage, Employees.employee_id
+            FROM Employees
+            JOIN Roles ON Roles.role_id = Employees.role_id
+            WHERE Employees.first_name = ?
+            """,
+            ("Dana",),
         ).fetchone()
+        linked_employee_id = connection.execute(
+            "SELECT employee_id FROM Users WHERE username = ?", ("test",)
+        ).fetchone()[0]
         connection.close()
 
-        self.assertEqual(dana_example, ("Dana Example", "Supervisor", 28.0, 1))
+        self.assertEqual(dana_example[:4], ("Dana", "Example", "Supervisor", 28.0))
+        # The "test" login is now linked to the new employee record
+        self.assertEqual(linked_employee_id, dana_example[4])
 
         response = self.client.get("/employees")
         self.assertEqual(response.status_code, 200)
@@ -266,6 +339,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         expected_forecast = 200 / 30
         actual_forecast = app_module.generate_forecast() / 30
         self.assertAlmostEqual(expected_forecast, actual_forecast)
+
 
 if __name__ == "__main__":
     unittest.main()
