@@ -1,110 +1,219 @@
 import sqlite3
 import unittest
 
-import employee_service as svc
+from errors import NotFoundError, ValidationError
+from repositories.employee_repository import EmployeeRepository
+from services.employee_service import EmployeeService
+
+SCHEMA = """
+CREATE TABLE Roles(
+    role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role_name TEXT NOT NULL UNIQUE);
+CREATE TABLE Employees(
+    employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role_id INTEGER NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    hourly_rate REAL NOT NULL,
+    max_hours_per_week INTEGER NOT NULL DEFAULT 40,
+    preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
+    active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE Qualifications(
+    qualification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    qualification_name TEXT NOT NULL UNIQUE);
+CREATE TABLE EmployeeQualifications(
+    employee_id INTEGER NOT NULL,
+    qualification_id INTEGER NOT NULL,
+    PRIMARY KEY (employee_id, qualification_id));
+INSERT INTO Roles (role_name) VALUES ('Cashier'), ('Cook');
+INSERT INTO Qualifications (qualification_name)
+    VALUES ('Cash Handling'), ('Food Handler');
+"""
 
 
-def make_db():
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.executescript("""
-        CREATE TABLE Roles(role_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                           role_name TEXT NOT NULL UNIQUE);
-        CREATE TABLE Employees(employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                               role_id INTEGER NOT NULL,
-                               first_name TEXT NOT NULL,
-                               last_name TEXT NOT NULL,
-                               hourly_wage REAL NOT NULL);
-        CREATE TABLE Qualifications(qualification_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                    qualification_name TEXT NOT NULL UNIQUE);
-        CREATE TABLE EmployeeQualifications(employee_id INTEGER NOT NULL,
-                                            qualification_id INTEGER NOT NULL,
-                                            PRIMARY KEY (employee_id, qualification_id));
-        CREATE TABLE Users(userid INTEGER PRIMARY KEY AUTOINCREMENT,
-                           username TEXT, employee_id INTEGER NOT NULL);
-        INSERT INTO Roles (role_name) VALUES ('Cashier'), ('Cook');
-        INSERT INTO Qualifications (qualification_name)
-            VALUES ('Cash Handling'), ('Food Handler');
-    """)
-    return conn
+def valid(**changes):
+    data = {"first_name": "Ana", "last_name": "Ruiz", "role_id": 1,
+            "hourly_rate": 18.5, "max_hours_per_week": 40,
+            "preferred_hours_per_week": 32}
+    data.update(changes)
+    return data
 
 
 class EmployeeServiceTests(unittest.TestCase):
     def setUp(self):
-        self.conn = make_db()
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.executescript(SCHEMA)
+        self.service = EmployeeService(EmployeeRepository(self.conn))
 
     def tearDown(self):
         self.conn.close()
 
-    def _create(self, first="Ana", last="Lopez", role=1, wage="15.50", quals=(1,)):
-        clean, errors = svc.validate_employee(self.conn, first, last, role, wage)
-        self.assertEqual(errors, [])
-        return svc.create_employee(self.conn, clean, list(quals))
+    def fields_with_errors(self, data):
+        with self.assertRaises(ValidationError) as context:
+            self.service.create_employee(data)
+        return {d["field"] for d in context.exception.details}
 
-    def test_validate_accepts_good_data(self):
-        clean, errors = svc.validate_employee(self.conn, " Ana ", "Lopez", "1", "15.5")
-        self.assertEqual(errors, [])
-        self.assertEqual(clean["first_name"], "Ana")
-        self.assertEqual(clean["hourly_wage"], 15.5)
-
-    def test_validate_rejects_bad_data(self):
-        _, errors = svc.validate_employee(self.conn, "", "", 99, "abc")
-        self.assertEqual(len(errors), 4)
-
-    def test_validate_rejects_negative_wage(self):
-        _, errors = svc.validate_employee(self.conn, "A", "B", 1, "-5")
-        self.assertTrue(any("wage" in e.lower() for e in errors))
-
+    # ----- create / read ------------------------------------------
     def test_create_and_get(self):
-        emp_id = self._create(quals=(1, 2))
-        employee, qual_ids = svc.get_employee(self.conn, emp_id)
-        self.assertEqual(employee["first_name"], "Ana")
-        self.assertEqual(employee["role_name"], "Cashier")
-        self.assertEqual(sorted(qual_ids), [1, 2])
+        created = self.service.create_employee(valid(qualification_ids=[1, 2]))
+        fetched = self.service.get_employee(created.employee_id)
+        self.assertEqual(fetched.first_name, "Ana")
+        self.assertEqual(fetched.hourly_rate, 18.5)
+        self.assertTrue(fetched.active)
+        self.assertEqual(fetched.qualification_ids, (1, 2))
 
-    def test_get_missing_employee(self):
-        employee, qual_ids = svc.get_employee(self.conn, 999)
-        self.assertIsNone(employee)
-        self.assertEqual(qual_ids, [])
+    def test_create_uses_hour_defaults(self):
+        data = valid()
+        del data["max_hours_per_week"]
+        del data["preferred_hours_per_week"]
+        employee = self.service.create_employee(data)
+        self.assertEqual(employee.max_hours_per_week, 40)
+        self.assertEqual(employee.preferred_hours_per_week, 32)
 
-    def test_update(self):
-        emp_id = self._create()
-        clean, _ = svc.validate_employee(self.conn, "Ana", "Garcia", 2, "18")
-        self.assertTrue(svc.update_employee(self.conn, emp_id, clean, [2]))
-        employee, qual_ids = svc.get_employee(self.conn, emp_id)
-        self.assertEqual(employee["last_name"], "Garcia")
-        self.assertEqual(employee["role_name"], "Cook")
-        self.assertEqual(qual_ids, [2])
+    def test_names_are_trimmed(self):
+        employee = self.service.create_employee(valid(first_name="  Ana  "))
+        self.assertEqual(employee.first_name, "Ana")
 
-    def test_update_missing_returns_false(self):
-        clean, _ = svc.validate_employee(self.conn, "A", "B", 1, "10")
-        self.assertFalse(svc.update_employee(self.conn, 999, clean, []))
+    def test_get_missing_raises_not_found(self):
+        with self.assertRaises(NotFoundError):
+            self.service.get_employee(999)
 
-    def test_delete(self):
-        emp_id = self._create()
-        self.assertTrue(svc.delete_employee(self.conn, emp_id))
-        self.assertIsNone(svc.get_employee(self.conn, emp_id)[0])
+    # ----- validation (SDS section 8.7) ---------------------------
+    def test_names_required_and_max_50(self):
+        self.assertEqual(self.fields_with_errors(valid(first_name="  ")),
+                         {"first_name"})
+        self.assertEqual(self.fields_with_errors(valid(last_name="x" * 51)),
+                         {"last_name"})
+        self.service.create_employee(valid(last_name="x" * 50))
 
-    def test_delete_blocked_when_user_linked(self):
-        emp_id = self._create()
-        self.conn.execute("INSERT INTO Users (username, employee_id) VALUES ('ana', ?)",
-                          (emp_id,))
-        with self.assertRaises(ValueError):
-            svc.delete_employee(self.conn, emp_id)
+    def test_hourly_rate_rules(self):
+        for bad in (0, -1, 500.01, "abc", None, float("nan")):
+            self.assertEqual(self.fields_with_errors(valid(hourly_rate=bad)),
+                             {"hourly_rate"}, msg=f"rate {bad!r}")
+        self.service.create_employee(valid(hourly_rate=500))
+
+    def test_max_hours_rules(self):
+        for bad in (0, 81, "x", 40.5):
+            self.assertEqual(
+                self.fields_with_errors(valid(max_hours_per_week=bad)),
+                {"max_hours_per_week"}, msg=f"max {bad!r}")
+        self.service.create_employee(valid(max_hours_per_week=80,
+                                           preferred_hours_per_week=80))
+
+    def test_preferred_cannot_exceed_max(self):
+        fields = self.fields_with_errors(
+            valid(max_hours_per_week=20, preferred_hours_per_week=30))
+        self.assertEqual(fields, {"preferred_hours_per_week"})
+
+    def test_unknown_role_rejected(self):
+        self.assertEqual(self.fields_with_errors(valid(role_id=99)),
+                         {"role_id"})
+        self.assertEqual(self.fields_with_errors(valid(role_id=None)),
+                         {"role_id"})
+
+    def test_all_problems_reported_together(self):
+        fields = self.fields_with_errors(
+            {"first_name": "", "last_name": "", "role_id": 99,
+             "hourly_rate": -5})
+        self.assertEqual(fields, {"first_name", "last_name", "role_id",
+                                  "hourly_rate"})
+
+    def test_failed_create_saves_nothing(self):
+        self.fields_with_errors(valid(hourly_rate=-1))
+        self.assertEqual(self.service.list_employees(include_inactive=True), [])
+
+    def test_unknown_qualification_rejected_and_nothing_saved(self):
+        self.assertEqual(
+            self.fields_with_errors(valid(qualification_ids=[1, 42])),
+            {"qualification_ids"})
+        self.assertEqual(self.service.list_employees(include_inactive=True), [])
+
+    # ----- update -------------------------------------------------
+    def test_update_changes_fields_and_keeps_qualifications(self):
+        created = self.service.create_employee(valid(qualification_ids=[1]))
+        updated = self.service.update_employee(
+            created.employee_id,
+            valid(last_name="Garcia", role_id=2, hourly_rate=20))
+        self.assertEqual(updated.last_name, "Garcia")
+        self.assertEqual(updated.role_id, 2)
+        self.assertEqual(updated.qualification_ids, (1,))
+
+    def test_update_can_replace_qualifications(self):
+        created = self.service.create_employee(valid(qualification_ids=[1]))
+        updated = self.service.update_employee(
+            created.employee_id, valid(qualification_ids=[2]))
+        self.assertEqual(updated.qualification_ids, (2,))
+
+    def test_update_missing_raises_not_found(self):
+        with self.assertRaises(NotFoundError):
+            self.service.update_employee(999, valid())
+
+    def test_update_invalid_changes_nothing(self):
+        created = self.service.create_employee(valid())
+        with self.assertRaises(ValidationError):
+            self.service.update_employee(created.employee_id,
+                                         valid(hourly_rate=0))
+        self.assertEqual(
+            self.service.get_employee(created.employee_id).hourly_rate, 18.5)
+
+    # ----- deactivate / list / search -----------------------------
+    def test_deactivate_hides_from_default_list(self):
+        created = self.service.create_employee(valid())
+        self.service.deactivate_employee(created.employee_id)
+        self.assertEqual(self.service.list_employees(), [])
+        self.assertEqual(len(self.service.list_employees(include_inactive=True)), 1)
+        self.assertFalse(self.service.get_employee(created.employee_id).active)
+
+    def test_deactivate_missing_raises_not_found(self):
+        with self.assertRaises(NotFoundError):
+            self.service.deactivate_employee(999)
+
+    def test_set_qualifications(self):
+        created = self.service.create_employee(valid())
+        updated = self.service.set_qualifications(created.employee_id, [2, 1, 2])
+        self.assertEqual(updated.qualification_ids, (1, 2))
+        cleared = self.service.set_qualifications(created.employee_id, [])
+        self.assertEqual(cleared.qualification_ids, ())
+        with self.assertRaises(NotFoundError):
+            self.service.set_qualifications(999, [1])
+        with self.assertRaises(ValidationError):
+            self.service.set_qualifications(created.employee_id, [77])
 
     def test_search(self):
-        self._create(first="Ana", last="Lopez", role=1, quals=(1,))
-        self._create(first="Ben", last="Cook", role=2, quals=(2,))
-        self.assertEqual(len(svc.list_employees(self.conn)), 2)
-        self.assertEqual(len(svc.list_employees(self.conn, "ana")), 1)
-        self.assertEqual(len(svc.list_employees(self.conn, "Cook")), 1)
-        self.assertEqual(len(svc.list_employees(self.conn, "Food Handler")), 1)
-        self.assertEqual(len(svc.list_employees(self.conn, "zzz")), 0)
+        self.service.create_employee(
+            valid(first_name="Ana", last_name="Lopez", role_id=1,
+                  qualification_ids=[1]))
+        self.service.create_employee(
+            valid(first_name="Ben", last_name="Smith", role_id=2,
+                  qualification_ids=[2]))
+        count = lambda text: len(self.service.list_employees(search=text))
+        self.assertEqual(count(None), 2)
+        self.assertEqual(count("  "), 2)
+        self.assertEqual(count("ana"), 1)
+        self.assertEqual(count("Ana Lopez"), 1)
+        self.assertEqual(count("Cook"), 1)
+        self.assertEqual(count("Food Handler"), 1)
+        self.assertEqual(count("zzz"), 0)
 
-    def test_create_qualification_rejects_duplicates_and_blanks(self):
-        self.assertIsNotNone(svc.create_qualification(self.conn, "First Aid"))
-        self.assertIsNone(svc.create_qualification(self.conn, "first aid"))
-        self.assertIsNone(svc.create_qualification(self.conn, "   "))
+    def test_search_is_not_sql_injectable(self):
+        self.service.create_employee(valid())
+        self.assertEqual(
+            len(self.service.list_employees(search="' OR '1'='1")), 0)
+
+    def test_list_is_sorted_by_last_then_first_name(self):
+        self.service.create_employee(valid(first_name="Zed", last_name="Adams"))
+        self.service.create_employee(valid(first_name="Amy", last_name="Adams"))
+        self.service.create_employee(valid(first_name="Bob", last_name="Baker"))
+        names = [(e.last_name, e.first_name)
+                 for e in self.service.list_employees()]
+        self.assertEqual(names, [("Adams", "Amy"), ("Adams", "Zed"),
+                                 ("Baker", "Bob")])
+
+    # ----- output hiding ------------------------------------------
+    def test_rate_can_be_hidden_for_employee_role(self):
+        employee = self.service.create_employee(valid())
+        self.assertIn("hourly_rate", employee.to_dict())
+        self.assertNotIn("hourly_rate", employee.to_dict(include_rate=False))
 
 
 if __name__ == "__main__":
