@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import sqlite3
 from werkzeug.security import generate_password_hash
@@ -10,6 +9,8 @@ cursor = conn.cursor()
 
 # Drop existing tables
 # TODO: remove later, only for development purposes
+cursor.execute("DROP TABLE IF EXISTS EmployeeQualifications")
+cursor.execute("DROP TABLE IF EXISTS Qualifications")
 cursor.execute("DROP TABLE IF EXISTS SystemRoles")
 cursor.execute("DROP TABLE IF EXISTS Roles")
 cursor.execute("DROP TABLE IF EXISTS Employees")
@@ -17,34 +18,58 @@ cursor.execute("DROP TABLE IF EXISTS Users")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS SystemRoles(
-    system_role_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role_name TEXT NOT NULL UNIQUE,
-    description TEXT
+system_role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+role_name TEXT NOT NULL UNIQUE,
+description TEXT
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Roles(
-    role_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role_name TEXT NOT NULL UNIQUE,
-    system_role_id INTEGER NOT NULL,
-    CONSTRAINT fk_system_role_id
-        FOREIGN KEY (system_role_id) 
-        REFERENCES SystemRoles(system_role_id)
+role_id INTEGER PRIMARY KEY AUTOINCREMENT,
+role_name TEXT NOT NULL UNIQUE,
+system_role_id INTEGER NOT NULL,
+CONSTRAINT fk_system_role_id
+FOREIGN KEY (system_role_id)
+REFERENCES SystemRoles(system_role_id)
 )
 """)
 
 # Proof of Concept: Employee Management
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Employees(
-    employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role_id INTEGER NOT NULL,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    hourly_wage REAL NOT NULL,
-    CONSTRAINT fk_role_id
-        FOREIGN KEY (role_id)
-        REFERENCES Roles(role_id)
+employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+role_id INTEGER NOT NULL,
+first_name TEXT NOT NULL,
+last_name TEXT NOT NULL,
+hourly_rate REAL NOT NULL,
+max_hours_per_week INTEGER NOT NULL DEFAULT 40,
+preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
+active INTEGER NOT NULL DEFAULT 1,
+CONSTRAINT fk_role_id
+FOREIGN KEY (role_id)
+REFERENCES Roles(role_id)
+)
+""")
+
+# US-3: Qualifications (certifications/skills an employee can hold)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Qualifications(
+qualification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+qualification_name TEXT NOT NULL UNIQUE
+)
+""")
+
+# US-3: Many-to-many link between Employees and Qualifications
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS EmployeeQualifications(
+employee_id INTEGER NOT NULL,
+qualification_id INTEGER NOT NULL,
+PRIMARY KEY (employee_id, qualification_id),
+CONSTRAINT fk_eq_employee
+FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
+CONSTRAINT fk_eq_qualification
+FOREIGN KEY (qualification_id) REFERENCES Qualifications(qualification_id)
 )
 """)
 
@@ -52,17 +77,17 @@ CREATE TABLE IF NOT EXISTS Employees(
 # Levels 0 = Unregistered, 1 = Employee, 2 = Manager, 3 = Admin
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Users(
-    userid INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL,
-    system_role_id INTEGER NOT NULL DEFAULT 0,
-    employee_id INTEGER NOT NULL,
-    CONSTRAINT fk_system_role_id
-        FOREIGN KEY (system_role_id) 
-        REFERENCES SystemRoles(system_role_id),
-    CONSTRAINT fk_employee_id
-        FOREIGN KEY (employee_id) 
-        REFERENCES Employees(employee_id)
+userid INTEGER PRIMARY KEY AUTOINCREMENT,
+username TEXT NOT NULL UNIQUE,
+password TEXT NOT NULL,
+system_role_id INTEGER NOT NULL DEFAULT 0,
+employee_id INTEGER NOT NULL,
+CONSTRAINT fk_system_role_id
+FOREIGN KEY (system_role_id)
+REFERENCES SystemRoles(system_role_id),
+CONSTRAINT fk_employee_id
+FOREIGN KEY (employee_id)
+REFERENCES Employees(employee_id)
 )
 """)
 
@@ -71,7 +96,7 @@ cursor.executemany(
     """
     INSERT INTO SystemRoles (system_role_id, role_name, description)
     VALUES
-        (?, ?, ?)
+    (?, ?, ?)
     """,
     [
         (0, 'Unregistered', 'Unregistered user with no access'),
@@ -86,7 +111,7 @@ cursor.executemany(
     """
     INSERT INTO Roles (role_name, system_role_id)
     VALUES
-        (?, ?)
+    (?, ?)
     """,
     [
         ('Example Associate', 1),
@@ -97,7 +122,7 @@ cursor.executemany(
 
 cursor.executemany(
     """
-    INSERT INTO Employees (role_id, first_name, last_name, hourly_wage)
+    INSERT INTO Employees (role_id, first_name, last_name, hourly_rate)
     VALUES (?, ?, ?, ?)
     """,
     [
@@ -105,6 +130,27 @@ cursor.executemany(
         (2, 'Bob', 'Manager', 20.00),
         (3, 'Charlie', 'Administrator', 25.00)
     ],
+)
+
+# US-3: seed qualifications and link them to the example employees
+cursor.executemany(
+    "INSERT INTO Qualifications (qualification_name) VALUES (?)",
+    [
+        ('Food Handler Certified',),
+        ('Cash Handling',),
+        ('Opening Shift',),
+        ('Closing Shift',),
+        ('First Aid / CPR',)
+    ]
+)
+
+cursor.executemany(
+    "INSERT INTO EmployeeQualifications (employee_id, qualification_id) VALUES (?, ?)",
+    [
+        (1, 1), (1, 2),
+        (2, 1), (2, 2), (2, 3), (2, 4),
+        (3, 5)
+    ]
 )
 
 cursor.executemany(

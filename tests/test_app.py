@@ -54,7 +54,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 role_id INTEGER NOT NULL,
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
-                hourly_wage REAL NOT NULL,
+                hourly_rate REAL NOT NULL,
                 FOREIGN KEY (role_id) REFERENCES Roles(role_id)
             );
 
@@ -83,7 +83,7 @@ class WorkforceIQTestCase(unittest.TestCase):
             [("Manager", 2), ("Associate", 1)],
         )
         connection.executemany(
-            "INSERT INTO Employees(role_id, first_name, last_name, hourly_wage) VALUES (?, ?, ?, ?)",
+            "INSERT INTO Employees(role_id, first_name, last_name, hourly_rate) VALUES (?, ?, ?, ?)",
             [
                 (1, "Alice", "Example", 30.0),
                 (2, "Bob", "Example", 20.0),
@@ -132,9 +132,9 @@ class WorkforceIQTestCase(unittest.TestCase):
     # (get_employees_json() no longer exists, so requests.get is mocked directly.)
     def test_get_employee_context_string(self):
         preset_employees = [
-            {"first_name": "Alice", "last_name": "Example", "role": "Manager", "hourly_wage": 30.0},
-            {"first_name": "Bob", "last_name": "Example", "role": "Associate", "hourly_wage": 20.0},
-            {"first_name": "Carol", "last_name": "Example", "role": "Associate", "hourly_wage": 22.5},
+            {"first_name": "Alice", "last_name": "Example", "role": "Manager", "hourly_rate": 30.0},
+            {"first_name": "Bob", "last_name": "Example", "role": "Associate", "hourly_rate": 20.0},
+            {"first_name": "Carol", "last_name": "Example", "role": "Associate", "hourly_rate": 22.5},
         ]
 
         with patch.object(app_module.requests, "get") as mock_get:
@@ -205,7 +205,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 "last_name": "Example",
                 "job_title": "Shift Supervisor",
                 "level": "Manager",
-                "hourly_wage": "28.50",
+                "hourly_rate": "28.50",
             },
             follow_redirects=False,
         )
@@ -221,7 +221,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         employee = connection.execute(
             """
             SELECT Employees.first_name, Employees.last_name,
-                   Roles.role_name, Employees.hourly_wage
+                   Roles.role_name, Employees.hourly_rate
             FROM Users
             JOIN Employees ON Employees.employee_id = Users.employee_id
             JOIN Roles ON Roles.role_id = Employees.role_id
@@ -244,7 +244,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 "last_name": "3Example",
                 "job_title": "",
                 "level": "Associate",
-                "hourly_wage": "12.345",
+                "hourly_rate": "12.345",
             },
         )
 
@@ -266,7 +266,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 "last_name": "Example",
                 "job_title": "Cashier",
                 "level": "Associate",
-                "hourly_wage": "15.00",
+                "hourly_rate": "15.00",
             },
         )
 
@@ -289,7 +289,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(len(employees), 3)
         self.assertEqual(employees[0]["first_name"], "Alice")
         self.assertEqual(employees[0]["last_name"], "Example")
-        self.assertAlmostEqual(employees[1]["hourly_wage"], 20.0)
+        self.assertAlmostEqual(employees[1]["hourly_rate"], 20.0)
         self.assertEqual(employees[2]["role"], "Associate")
 
     def test_employee_can_be_added_to_testing_database(self):
@@ -314,7 +314,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         dana_example = connection.execute(
             """
             SELECT Employees.first_name, Employees.last_name,
-                   Roles.role_name, Employees.hourly_wage, Employees.employee_id
+                   Roles.role_name, Employees.hourly_rate, Employees.employee_id
             FROM Employees
             JOIN Roles ON Roles.role_id = Employees.role_id
             WHERE Employees.first_name = ?
