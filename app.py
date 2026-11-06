@@ -46,7 +46,7 @@ def get_employee_context():
         context += (
             f"Name: {employee["first_name"].strip() + ' ' + employee["last_name"].strip()}, "
             f"Role: {employee['role']}, "
-            f"Wage: ${employee["hourly_wage"]}/hr\n"
+            f"Wage: ${employee["hourly_rate"]}/hr\n"
         )
     print("Employee Context:\n" + context) #TODO: Remove this debug print statement in production
     return context
@@ -165,7 +165,7 @@ def register():
         "last_name": request.form.get("last_name", "").strip(),
         "job_title": request.form.get("job_title", "").strip(),
         "level": request.form.get("level", "").strip(),
-        "hourly_wage": request.form.get("hourly_wage", request.form.get("hourly_wage", "")).strip(),
+        "hourly_rate": request.form.get("hourly_rate", request.form.get("hourly_rate", "")).strip(),
     }
 
     errors = []
@@ -190,13 +190,13 @@ def register():
     if level is None or level not in (1, 2, 3):
         errors.append("Please select a valid level.")
 
-    hourly_wage = None
-    if fields["hourly_wage"]:
+    hourly_rate = None
+    if fields["hourly_rate"]:
         try:
-            hourly_wage = Decimal(fields["hourly_wage"])
-            if not hourly_wage.is_finite() or hourly_wage < 0:
+            hourly_rate = Decimal(fields["hourly_rate"])
+            if not hourly_rate.is_finite() or hourly_rate < 0:
                 raise InvalidOperation
-            if hourly_wage.as_tuple().exponent < -2:
+            if hourly_rate.as_tuple().exponent < -2:
                 errors.append("Hourly wage must have no more than 2 digits after the decimal point.")
         except (InvalidOperation, ValueError):
             errors.append("Hourly wage must be a valid number.")
@@ -233,14 +233,14 @@ def register():
         cursor.execute(
             """
             INSERT INTO Employees
-            (role_id, first_name, last_name, hourly_wage)
+            (role_id, first_name, last_name, hourly_rate)
             VALUES (?, ?, ?, ?)
             """,
             (
                 role_id,
                 fields["first_name"],
                 fields["last_name"],
-                float(hourly_wage),
+                float(hourly_rate),
             ),
         )
         employee_id = cursor.lastrowid
@@ -378,7 +378,7 @@ def employees():
                 WHEN 3 THEN 'Administrator'
             END AS account_level,
             Roles.system_role_id,
-            Employees.hourly_wage
+            Employees.hourly_rate
         FROM Employees
         LEFT JOIN Roles ON Roles.role_id = Employees.role_id
         """
@@ -389,18 +389,18 @@ def employees():
     for row in cursor.fetchall():
         employee_id = row["employee_id"]
         account_level = row["system_role_id"]
-        hourly_wage = None
+        hourly_rate = None
 
         # Admins see all
         if current_user.system_role_id == 3:
-            hourly_wage = row["hourly_wage"]
+            hourly_rate = row["hourly_rate"]
         # Managers see their own wage and Associates wages
         elif current_user.system_role_id == 2:
             if account_level == 1 or employee_id == current_user.employee_id:
-                hourly_wage = row["hourly_wage"]
+                hourly_rate = row["hourly_rate"]
         # Associates only see their own wage
         elif employee_id == current_user.employee_id:
-            hourly_wage = row["hourly_wage"]
+            hourly_rate = row["hourly_rate"]
 
         # Add data to employees to be put into the table
         employees.append((
@@ -408,7 +408,7 @@ def employees():
             row["last_name"],
             row["role_name"],
             row["account_level"],
-            hourly_wage,
+            hourly_rate,
         ))
 
     conn.close()
@@ -423,7 +423,7 @@ def add_employee():
     last_name = request.form["last_name"].strip()
     role_name = request.form["role_name"].strip()
     level = int(request.form["level"])
-    hourly_wage = request.form["wage"].strip()
+    hourly_rate = request.form["wage"].strip()
     username = request.form.get("username", "").strip()
 
     conn = get_db_connection()
@@ -445,10 +445,10 @@ def add_employee():
     cursor.execute(
         """
         INSERT INTO Employees
-        (role_id, first_name, last_name, hourly_wage)
+        (role_id, first_name, last_name, hourly_rate)
         VALUES (?, ?, ?, ?)
         """,
-        (role_id, first_name, last_name, hourly_wage),
+        (role_id, first_name, last_name, hourly_rate),
     )
     employee_id = cursor.lastrowid
 
@@ -491,7 +491,7 @@ def api_employees():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT first_name, last_name, role_id, hourly_wage
+        SELECT first_name, last_name, role_id, hourly_rate
         FROM Employees
     """)
     results = []
@@ -504,7 +504,7 @@ def api_employees():
             "first_name": row["first_name"],
             "last_name": row["last_name"],
             "role": role_name["role_name"] if role_name else None,
-            "hourly_wage": row["hourly_wage"],
+            "hourly_rate": row["hourly_rate"],
         })
 
     conn.close()

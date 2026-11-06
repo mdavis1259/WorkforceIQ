@@ -42,7 +42,7 @@ employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
 role_id INTEGER NOT NULL,
 first_name TEXT NOT NULL,
 last_name TEXT NOT NULL,
-hourly_wage REAL NOT NULL,
+hourly_rate REAL NOT NULL,
 max_hours_per_week INTEGER NOT NULL DEFAULT 40,
 preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
 active INTEGER NOT NULL DEFAULT 1,
@@ -122,7 +122,7 @@ cursor.executemany(
 
 cursor.executemany(
     """
-    INSERT INTO Employees (role_id, first_name, last_name, hourly_wage)
+    INSERT INTO Employees (role_id, first_name, last_name, hourly_rate)
     VALUES (?, ?, ?, ?)
     """,
     [
