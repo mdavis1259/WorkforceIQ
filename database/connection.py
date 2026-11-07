@@ -1,14 +1,12 @@
 import sqlite3
-from flask import current_app, has_app_context
 
-def get_db_connection():
+from flask import current_app
 
-    if has_app_context():
+
+def get_db_connection(database=None):
+    if database is None:
         database = current_app.config.get("DATABASE", "database/workforce.db")
-    else:
-        database = "database/workforce.db"
 
     connection = sqlite3.connect(database)
     connection.row_factory = sqlite3.Row
-
     return connection

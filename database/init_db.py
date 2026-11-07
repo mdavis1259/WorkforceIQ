@@ -224,6 +224,33 @@ CREATE TABLE IF NOT EXISTS ShiftAssignments(
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id)
 )
+    CREATE TABLE IF NOT EXISTS Shifts(
+        shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shift_name TEXT NOT NULL,
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1
+        CONSTRAINT boolean_active
+                    CHECK (active IN (0, 1))
+    )
+""")
+
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS EmployeeAvailability(
+        employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER NOT NULL,
+        shift_id INTEGER NOT NULL,
+        availability INTEGER NOT NULL DEFAULT 1,
+        
+        CONSTRAINT fk_employee_id
+            FOREIGN KEY (employee_id)
+            REFERENCES Employees(employee_id),
+        CONSTRAINT fk_shift_id
+            FOREIGN KEY (shift_id)
+            REFERENCES Shifts(shift_id),
+        CONSTRAINT boolean_availability
+            CHECK (availability IN (0, 1))
+    )
 """)
 
 # Create system roles, keep for final version
