@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WorkforceIQ</title>
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('employees') }}">Employees</a>
+        <a href="{{ url_for('forecast') }}">Forecast</a>
+        <a href="{{ url_for('ai_assistant') }}">AI Assistant</a>
+        {% if current_user.is_authenticated %}
+        <span class="navbar-username">{{ current_user.username }}</span>
+        <a href="{{ url_for('logout') }}" class="navbar-logout">Logout</a>
+        {% endif %}
+    </nav>
+    <main class="container">
+        <h1>Availability</h1>
+    <div class="calendar-wrapper dashboard">
+        <div id="calendar" class="availability_calendar"></div>
+    </div>
+    <script>
+        let calendarEl = document.getElementById('calendar');
+        let calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            height: 'auto',
+            contentHeight: 'auto',
+            slotDuration: '00:15:00',
+            slotMinTime: '00:00:00',
+            slotMaxTime: '24:00:00',
+            allDaySlot: true,
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek'
+            },
+            events: [
+                {
+                    title: 'Shift 1',
+                    start: '2026-11-02T01:00:00',
+                    end: '2026-11-02T02:00:00',
+                    color: 'blue'
+                },
+                {
+                    title: 'Shift 1',
+                    start: '2026-11-03T23:00:00',
+                    end: '2026-11-04T00:00:00',
+                    color: 'red'
+                },
+            ]
+            // events: [
+            //     {% for event in availability %}
+            //     {
+            //         title: '{{ event.title }}',
+            //         start: '{{ event.start }}',
+            //         end: '{{ event.end }}'
+            //     },
+            //     {% endfor %}
+            // ]
+        });
+        calendar.render();
+
+        window.addEventListener('resize', function () {
+            calendar.updateSize();
+        });
+    </script>
+    </main>
+    <footer class="footer">
+         WorkforceIQ Proof of Concept
+    </footer>
+</body>

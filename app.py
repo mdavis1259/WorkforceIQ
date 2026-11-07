@@ -4,17 +4,20 @@ import requests
 import numpy as np
 from decimal import Decimal, InvalidOperation
 from auth import authenticate_user
+from database.connection import get_db_connection as create_db_connection
 from sklearn.linear_model import LinearRegression
 from werkzeug.security import generate_password_hash
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from availability.AvailabilityRoutes import avail
+from database.connection import get_db_connection
 
 app = Flask(__name__)
 app.secret_key = (
     app.config.get("SECRET_KEY")
     or "development-key-change-in-production"
 )
-
+app.register_blueprint(avail)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
@@ -31,13 +34,6 @@ class User(UserMixin):
 # ======================================================
 # HELPER FUNCTIONS
 # ======================================================
-
-def get_db_connection():
-    #Uses regular database by default, but can be overridden for testing
-    database = app.config.get("DATABASE", "database/workforce.db") 
-    connection = sqlite3.connect(database)
-    connection.row_factory = sqlite3.Row #Lets us access columns by name instead of index
-    return connection
 
 def get_employee_context():
     employees = requests.get("http://127.0.0.1:5000/api/employees").json()

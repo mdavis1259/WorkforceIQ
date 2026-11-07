@@ -281,7 +281,6 @@ dialog::backdrop {
    ========================== */
 
 table {
-    margin-top: 20px;
     width: 100%;
     border-collapse: collapse;
     background: white;
@@ -346,4 +345,48 @@ tr:hover {
     padding: 20px;
     color: #666;
     margin-top: 40px;
+}
+
+/* ==========================
+   AVAILABILITY CALENDAR
+   ========================== */
+.calendar-wrapper {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+.calendar-wrapper > #calendar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.calendar-wrapper .fc {
+    width: 100%;
+}
+
+.calendar-wrapper .fc-toolbar.fc-header-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+
+    .calendar-wrapper {
+        padding: 15px;
+    }
+
+    .calendar-wrapper .fc-toolbar-title {
+        font-size: 1.1em;
+    }
+
+    .calendar-wrapper .fc-button {
+        padding: 0.4em;
+        font-size: 0.85em;
+    }
 }
