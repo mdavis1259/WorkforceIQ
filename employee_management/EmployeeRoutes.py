@@ -1,3 +1,39 @@
+"""
+Employee Management Routes
+
+Per the WorkforceIQ SDS, the Employee Management Module
+is responsible for:
+
+    - Employee records
+    - Job roles
+    - Qualifications
+    - Wage information
+
+Routes are part of the Presentation Layer and are
+responsible for:
+
+    - Receiving HTTP requests
+    - Validating request data
+    - Calling service methods
+    - Returning responses
+
+Per SDS Section 4.2:
+
+    Routes
+        ↓
+    EmployeeService
+        ↓
+    EmployeeRepository
+        ↓
+        SQLite
+
+Current Status:
+    This module is being refactored toward the SDS
+    architecture. Some routes still contain SQL and
+    business rules that should eventually be moved
+    into EmployeeService and EmployeeRepository.
+"""
+
 from flask import (
     Blueprint,
     render_template,
@@ -16,18 +52,47 @@ from database.connection import get_db_connection
 
 from werkzeug.security import generate_password_hash
 
+
+# =====================================================
+# EMPLOYEE MANAGEMENT BLUEPRINT
+# =====================================================
+
 employee_bp = Blueprint(
-    "employee", 
-    __name__, 
+    "employee",
+    __name__,
     template_folder="templates"
 )
+
+
+# =====================================================
+# EMPLOYEE DIRECTORY
+# =====================================================
 
 @employee_bp.route("/employees")
 @login_required
 def employees():
-    """ Displays a table with employee information """
+    """
+    Display employee records.
+
+    SDS Responsibility:
+        Employee Management Module
+
+    Architectural Note:
+        This route currently retrieves employee
+        information directly from the database.
+
+    Future Architecture:
+
+        EmployeeRoutes
+            ↓
+        EmployeeService.list_employees()
+            ↓
+        EmployeeRepository
+    """
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
     cursor.execute(
         """
         SELECT
@@ -49,25 +114,36 @@ def employees():
         """
     )
 
-    # Shows wage of employees based on the current user's access level
+    # SDS Requirement:
+    # Wage information visibility depends on user role.
+    # Employees should only see information appropriate
+    # to their authorization level.
     employees = []
+
     for row in cursor.fetchall():
+
         employee_id = row["employee_id"]
         account_level = row["system_role_id"]
         hourly_rate = None
 
-        # Admins see all
+        # Administrators can view all wage information.
         if current_user.system_role_id == 3:
             hourly_rate = row["hourly_rate"]
-        # Managers see their own wage and Associates wages
+
+        # Managers can view their own wage and
+        # wages for Associate-level employees.
         elif current_user.system_role_id == 2:
-            if account_level == 1 or employee_id == current_user.employee_id:
+            if (
+                account_level == 1
+                or employee_id == current_user.employee_id
+            ):
                 hourly_rate = row["hourly_rate"]
-        # Associates only see their own wage
+
+        # Associates may only view their own wage.
         elif employee_id == current_user.employee_id:
             hourly_rate = row["hourly_rate"]
 
-        # Add data to employees to be put into the table
+        # Build employee data for presentation.
         employees.append((
             row["first_name"],
             row["last_name"],
@@ -79,15 +155,57 @@ def employees():
     conn.close()
 
     return render_template(
-        "employees.html", 
-        employees=employees, 
+        "employees.html",
+        employees=employees,
         restricted=(current_user.system_role_id == 1)
     )
 
-#TODO: 400 call with errors when adding employee fails, and display errors on the page
+
+# =====================================================
+# CREATE EMPLOYEE
+# =====================================================
+
+# TODO:
+# Return SDS-compliant validation errors (400)
+# and display them on the Employee Management page.
+
 @employee_bp.route("/add_employee", methods=["POST"])
 @login_required
 def add_employee():
+    """
+    Create a new employee record.
+
+    SDS Responsibility:
+        Employee Management Module
+
+    Architectural Note:
+
+        This route currently performs work that
+        crosses multiple modules:
+
+            Employee Management
+                - Employee creation
+                - Role assignment
+
+            User Management
+                - User account linkage
+
+            Authentication
+                - Initial credential creation
+
+    Future Architecture:
+
+        EmployeeRoutes
+            ↓
+        EmployeeService.create_employee()
+            ↓
+        EmployeeRepository
+
+    User-account operations should eventually be
+    delegated to User Management through service
+    interfaces rather than direct database access.
+    """
+
     first_name = request.form["first_name"].strip()
     last_name = request.form["last_name"].strip()
     role_name = request.form["role_name"].strip()
@@ -98,10 +216,13 @@ def add_employee():
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # Retrieve an existing role or create a new role
+    # if one does not already exist.
     role_row = cursor.execute(
         "SELECT role_id FROM Roles WHERE role_name = ?",
         (role_name,),
     ).fetchone()
+
     if role_row is None:
         cursor.execute(
             "INSERT INTO Roles (role_name, system_role_id) VALUES (?, ?)",
@@ -111,6 +232,7 @@ def add_employee():
     else:
         role_id = role_row["role_id"]
 
+    # Create employee record.
     cursor.execute(
         """
         INSERT INTO Employees
@@ -119,18 +241,26 @@ def add_employee():
         """,
         (role_id, first_name, last_name, hourly_rate),
     )
+
     employee_id = cursor.lastrowid
 
+    # If a username was supplied, associate the employee
+    # with an existing account or create a new account.
     if username:
+
         user = cursor.execute(
             "SELECT userid FROM Users WHERE username = ?",
             (username,),
         ).fetchone()
+
+        # Link existing account.
         if user:
             cursor.execute(
                 "UPDATE Users SET employee_id = ? WHERE userid = ?",
                 (employee_id, user["userid"]),
             )
+
+        # Create new account.
         else:
             cursor.execute(
                 """
@@ -151,20 +281,49 @@ def add_employee():
 
     return redirect(url_for("employee.employees"))
 
+
+# =====================================================
+# EMPLOYEE API
+# =====================================================
+
 @employee_bp.route("/api/employees")
 def api_employees():
+    """
+    Return employee information as JSON.
+
+    SDS Endpoint:
+        GET /api/employees
+
+    Used by:
+        - Employee Management views
+        - AI Assistant context generation
+        - Future integration points
+
+    Architectural Note:
+        This route currently executes SQL directly.
+        Future versions should delegate employee
+        retrieval to EmployeeService.
+    """
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
+
+    cursor.execute(
+        """
         SELECT first_name, last_name, role_id, hourly_rate
         FROM Employees
-    """)
+        """
+    )
+
     results = []
+
     for row in cursor.fetchall():
+
         role_name = cursor.execute(
             "SELECT role_name FROM Roles WHERE role_id = ?",
             (row["role_id"],),
         ).fetchone()
+
         results.append({
             "first_name": row["first_name"],
             "last_name": row["last_name"],
@@ -173,4 +332,5 @@ def api_employees():
         })
 
     conn.close()
+
     return jsonify(results)
