@@ -19,6 +19,7 @@ Following the WorkforceIQ architecture:
 Routes must not access the database directly.
 All SQL belongs in the repository layer.
 """
+from user_management.User import User
 
 
 class UserService:
@@ -42,7 +43,7 @@ class UserService:
         """
         self.repository = repository
 
-    def get_user(self, user_id):
+    def get_user_by_id(self, user_id):
         """
         Retrieve a user account by its unique ID.
 
@@ -57,7 +58,17 @@ class UserService:
             User account data or None if the user
             does not exist.
         """
-        return self.repository.get_user_by_id(user_id)
+        row = self.repository.get_user_by_id(user_id)
+
+        if row is None:
+            return None
+
+        return User(
+            userid=row["userid"],
+            username=row["username"],
+            system_role_id=row["system_role_id"],
+            employee_id=row["employee_id"],
+        )
 
     def get_user_by_username(self, username):
         """

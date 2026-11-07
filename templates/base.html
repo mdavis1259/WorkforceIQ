@@ -9,8 +9,8 @@
     <nav class="navbar">
         <a href="{{ url_for('dashboard') }}">Dashboard</a>
         <a href="{{ url_for('employee.employees') }}">Employees</a>
-        <a href="{{ url_for('forecast') }}">Forecast</a>
-        <a href="{{ url_for('ai_assistant') }}">AI Assistant</a>
+        <a href="{{ url_for('forecast.forecast') }}">Forecast</a>
+        <a href="{{ url_for('assistant.ai_assistant') }}">AI Assistant</a>
         {% if current_user.is_authenticated %}
         <span class="navbar-username">{{ current_user.username }}</span>
         <a href="{{ url_for('auth.logout') }}" class="navbar-logout">Logout</a>

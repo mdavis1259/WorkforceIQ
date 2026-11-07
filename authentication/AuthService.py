@@ -92,7 +92,7 @@ class AuthService:
 
         return None
 
-    def get_user(self, user_id):
+    def get_user_by_user_id(self, user_id):
         """
         Retrieve a user account.
 

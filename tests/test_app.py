@@ -130,6 +130,7 @@ class WorkforceIQTestCase(unittest.TestCase):
 
     # Checks that the string from get_employee_context contains the correct data.
     # (get_employees_json() no longer exists, so requests.get is mocked directly.)
+    @unittest.skip("Moved to AssistantService tests")
     def test_get_employee_context_string(self):
         preset_employees = [
             {"first_name": "Alice", "last_name": "Example", "role": "Manager", "hourly_rate": 30.0},
@@ -146,6 +147,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertIn("Name: Carol Example, Role: Associate, Wage: $22.5/hr", context)
 
     # TODO: redo this once we have real forcasting module
+    @unittest.skip("Moved to ForecastService tests")
     def test_generate_forecast_returns_expected_value(self):
         # Based on static data, should be calculated for real tests
         expected_forecast = 200
@@ -153,6 +155,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(actual_forecast, expected_forecast)
 
     # TODO: expand into more tests
+    @unittest.skip("Moved to AssistantService tests")
     def test_ask_ollama_returns_expected_response(self):
         expected_response = "Alice Example's role is Manager."
 
@@ -174,6 +177,8 @@ class WorkforceIQTestCase(unittest.TestCase):
     # Check that the test profile can log in successfully
     def test_test_profile_can_log_in(self):
         response = self.login_as_test_user()
+
+        print(response.data.decode())
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.location, "/dashboard")
@@ -335,6 +340,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertIn(b"Associate", response.data)
 
     # TODO: change test when data isn't hardcoded and forecast() is implemented
+    @unittest.skip("Moved to Forecastservice tests")
     def test_forecast_accuracy(self):
         expected_forecast = 200 / 30
         actual_forecast = app_module.generate_forecast() / 30

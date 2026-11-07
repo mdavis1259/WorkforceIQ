@@ -1,7 +1,14 @@
 import sqlite3
+from flask import current_app, has_app_context
 
 def get_db_connection():
-    connection = sqlite3.connect("database/workforce.db")
-    connection.row_factory = sqlite3.Row #Lets us access columns by name instead of index
+
+    if has_app_context():
+        database = current_app.config.get("DATABASE", "database/workforce.db")
+    else:
+        database = "database/workforce.db"
+
+    connection = sqlite3.connect(database)
+    connection.row_factory = sqlite3.Row
 
     return connection
