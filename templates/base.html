@@ -8,7 +8,7 @@
 
     <nav class="navbar">
         <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('employees') }}">Employees</a>
+        <a href="{{ url_for('employee.employees') }}">Employees</a>
         <a href="{{ url_for('forecast') }}">Forecast</a>
         <a href="{{ url_for('ai_assistant') }}">AI Assistant</a>
         {% if current_user.is_authenticated %}

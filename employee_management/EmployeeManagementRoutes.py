@@ -12,9 +12,7 @@ from flask_login import (
     current_user,
 )
 
-from app import ( 
-    get_db_connection,
-)
+from database.connection import get_db_connection
 
 from werkzeug.security import generate_password_hash
 
@@ -151,7 +149,7 @@ def add_employee():
     conn.commit()
     conn.close()
 
-    return redirect(url_for("employees"))
+    return redirect(url_for("employee.employees"))
 
 @employee_bp.route("/api/employees")
 def api_employees():
