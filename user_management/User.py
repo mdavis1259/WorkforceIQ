@@ -19,7 +19,9 @@ class User(UserMixin):
         userid,
         username,
         system_role_id,
-        employee_id=None
+        password=None,
+        employee_id=None,
+        active=True
     ):
         """
         Create a User account object.
@@ -30,6 +32,10 @@ class User(UserMixin):
 
             username:
                 Username used to authenticate and identify
+                the user within WorkforceIQ.
+
+            password:
+                Password hash used to authenticate and identify
                 the user within WorkforceIQ.
 
             system_role_id:
@@ -54,8 +60,14 @@ class User(UserMixin):
         # Authentication username.
         self.username = username
 
+        # Authentication password.
+        self.password = password
+
         # Authorization level used for role checks.
         self.system_role_id = system_role_id
 
         # Linked Employee record.
         self.employee_id = employee_id
+
+        # Active Status
+        self.active = bool(active)
