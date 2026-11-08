@@ -20,7 +20,7 @@ Routes must not access the database directly.
 All SQL belongs in the repository layer.
 """
 from user_management.User import User
-from exceptions import (
+from shared.exceptions import (
     ValidationError,
     NotFoundError,
     InvalidStateError

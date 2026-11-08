@@ -30,7 +30,10 @@ User Management module.
 """
 
 from werkzeug.security import check_password_hash
-from user_management.UserService import UserService
+from shared.exceptions import(
+    InvalidCredentialsError,
+    PermissionDeniedError
+)
 
 
 class AuthService:
@@ -81,57 +84,47 @@ class AuthService:
             username
         )
 
-        if not user:
-            return None
+        if user is None:
+            raise InvalidCredentialsError(
+                "Invalid username or password."
+            )
 
-        if check_password_hash(
-            user["password"],
-            password
-        ):
-            return user
+        if not user.active:
+            raise PermissionDeniedError(
+                "Account is disabled."
+            )
 
-        return None
+        if not check_password_hash(user.password, password):
+            raise InvalidCredentialsError(
+                "Invalid username or password."
+            )
 
-    def get_user_by_user_id(self, user_id):
+        return user
+    
+
+    def get_user_by_user_id(self, userid):
         """
         Retrieve a user account.
-
-        TODO:
-        Determine ownership with the project team.
-
-        The SDS currently lists get_user() under
-        AuthService, but the User Management module
-        owns user accounts and permissions.
         """
-
-        raise NotImplementedError
-
-    def create_user(self, data):
+        return self.user_service.get_user_by_id(userid)
+    
+    def register(
+        self,
+        username,
+        password_hash,
+        system_role_id,
+        employee_id,
+    ):
         """
-        Create a new user account as part of the
-        registration workflow.
+        Register a new WorkforceIQ user.
 
-        TODO:
-        Clarify responsibility boundaries between
-        Authentication and User Management.
-
-        Current architectural direction:
-
-            Authentication:
-                - Registration workflow
-                - Login
-                - Logout
-                - Sessions
-                - Role checks
-
-            User Management:
-                - User account CRUD
-                - Permissions
-                - Role administration
-
-        Authentication should orchestrate the
-        registration process while delegating
-        user-account creation to User Management.
+        Authentication coordinates the registration workflow
+        but delegates ownership of user accounts to
+        User Management.
         """
-
-        raise NotImplementedError
+        return self.user_service.create_user(
+            username=username,
+            password=password_hash,
+            system_role_id=system_role_id,
+            employee_id=employee_id
+        )

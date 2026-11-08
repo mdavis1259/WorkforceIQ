@@ -11,6 +11,7 @@ from scheduling.SchedulingRoutes import scheduling_bp
 from ai_assistant.AssistantRoutes import ai_bp
 
 from user_management.User import User
+from user_management.UserRoutes import (user_bp, configure_user_routes)
 from user_management.UserService import UserService
 from user_management.UserRepository import UserRepository
 
@@ -19,8 +20,22 @@ from ai_assistant.AssistantService import AssistantService
 
 
 app = Flask(__name__)
+
 app.config["DATABASE"] = "database/workforce.db"
+
+# =============================================
+# USER MANAGEMENT DEPENDENCIES
+# =============================================
+user_conn = get_db_connection()
+user_repository = UserRepository(user_conn)
+user_service = UserService(user_repository)
+configure_user_routes(user_service)
+
+# =============================================
+# REGISTER BLUEPRINTS
+# =============================================
 app.register_blueprint(auth_bp)
+app.register_blueprint(user_bp)
 app.register_blueprint(employee_bp)
 app.register_blueprint(availability_bp)
 app.register_blueprint(forecasting_bp)

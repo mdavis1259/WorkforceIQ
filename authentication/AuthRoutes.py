@@ -21,10 +21,13 @@ from database.connection import get_db_connection
 from user_management.UserService import UserService
 from user_management.UserRepository import UserRepository
 from authentication.AuthService import AuthService
-from authentication.AuthRepository import AuthRepository
 from werkzeug.security import generate_password_hash
 
-from user_management.User import User
+from shared.exceptions import (
+    InvalidCredentialsError,
+    ValidationError
+)
+
 
 auth_bp = Blueprint (
     "auth",
@@ -49,48 +52,54 @@ def login():
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
-        conn = get_db_connection()
+
+        conn = None
 
         try:
+            conn = get_db_connection()
+
             user_repository = UserRepository(conn)
             user_service = UserService(user_repository)
             auth_service = AuthService(user_service)
-            user = auth_service.authenticate(username, password)
-        finally:
-            conn.close()
 
-        if user:
-            authenticated_user = User(
-                userid=user["userid"],
-                username=user["username"],
-                system_role_id=user["system_role_id"],
-                employee_id=user["employee_id"],
+            user = auth_service.authenticate(
+                username, 
+                password
             )
-            login_user(authenticated_user)
 
-            # User is unassigned, sets own level TODO: remove once login redirection is implemnnted
-            if authenticated_user.system_role_id == 0:
+        except InvalidCredentialsError:
+            error = "Invalid username or password."
+
+        else:
+            login_user(user)
+
+            if user.system_role_id == 0:
                 return redirect(url_for("auth.level_select"))
 
             # Else, go to dashboard
             return redirect(url_for("dashboard"))
 
-        error = "Invalid username or password."
+        finally:
+            if conn:
+                conn.close()
+        
         
     return render_template("login.html", error=error)
 
 # Registration for new users.
 @auth_bp.route("/register", methods=["POST"])
 
-# TODO:
-# Registration workflow currently spans:
-# Authentication
-# User Management
-# Employee Management
+# TODO (ARCH-1 Follow-up)
 #
-# Refactor into:
-# UserService/UserRepository
-# EmployeeService/EmployeeRepository
+# Registration currently spans:
+#   Roles
+#   Employees
+#   Users
+#
+# Transaction management remains in the route
+# until EmployeeService and EmployeeRepository
+# are implemented and registration can be
+# coordinated entirely through service contracts.
 def register():
     # Get form data and validate
     fields = {
@@ -147,10 +156,15 @@ def register():
             registration=fields,
         ), 400
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
 
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        user_repository = UserRepository(conn)
+        user_service = UserService(user_repository)
+        auth_service = AuthService(user_service)
+
         # Save an existing role, or create one for this new job title.
         role = cursor.execute(
             "SELECT role_id FROM Roles WHERE role_name = ?",
@@ -180,25 +194,21 @@ def register():
         )
         employee_id = cursor.lastrowid
 
-        cursor.execute(
-            """
-            INSERT INTO Users
-            (username, password, system_role_id, employee_id)
-            VALUES (?, ?, ?, ?)
-            """,
-            (
-                fields["username"],
-                generate_password_hash(fields["password"]),
-                level,
-                employee_id,
+        user = auth_service.register(
+            username=fields["username"],
+            password_hash=generate_password_hash(
+                fields["password"]
             ),
+            system_role_id=level,
+            employee_id=employee_id,
         )
-        userid = cursor.lastrowid
+        
+        userid = user.userid
 
         conn.commit()
-    except sqlite3.IntegrityError as error:
+    except ValidationError as error:
         conn.rollback()
-        conn.close()
+        
         return render_template(
             "login.html",
             registration_error=str(error),
@@ -212,12 +222,9 @@ def register():
     session["userid"] = userid
     session["username"] = fields["username"]
     session["system_role_id"] = level
-    login_user(User(
-        userid=userid,
-        username=fields["username"],
-        system_role_id=level,
-        employee_id=employee_id,
-    ))
+
+    login_user(user)
+
     return redirect(url_for("dashboard"))
 
 @auth_bp.route("/logout")
@@ -249,31 +256,28 @@ def level_select():
                 error="Please select a valid level."
             ), 400
 
+        conn = None
 
-        conn = get_db_connection()
-        conn.execute(
-            "UPDATE Users SET system_role_id = ? WHERE userid = ?",
-            (level, userid)
-        )
-        conn.commit()
+        try:
+            conn = get_db_connection()
+            user_repository = UserRepository(conn)
+            user_service = UserService(user_repository)
 
-        updated_level = conn.execute(
-            "SELECT system_role_id FROM Users WHERE userid = ?",
-            (userid,)
-        ).fetchone()
-        conn.close()
+            updated_user = user_service.change_role(
+                userid,
+                level
+            )
 
-        if updated_level is None:
+        finally:
+            if conn:
+                conn.close()
+
+        if updated_user is None:
             return redirect(url_for("auth.login"))
 
-        if updated_level["system_role_id"] != level or updated_level["system_role_id"] == 0:
-            return render_template(
-                "level_select.html",
-                error="Failed to update level. Please try again."
-            ), 500
-        
-        session["system_role_id"] = level
-        current_user.system_role_id = level
+        session["system_role_id"] = updated_user.system_role_id
+        current_user.system_role_id = updated_user.system_role_id
+
         return redirect(url_for("dashboard"))
 
     return render_template("level_select.html")
