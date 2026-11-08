@@ -19,6 +19,18 @@ class ForecastRepository:
 
         return cursor.fetchall()
 
+    def clear_forecasts(self):
+        """
+        Remove previously generated forecasts.
+        """
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            DELETE FROM Forecasts
+        """)
+
+        self.conn.commit()
 
     def save_forecast(
         self,
