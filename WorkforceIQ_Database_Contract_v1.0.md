@@ -1,25 +1,31 @@
-# WorkforceIQ Database Contract v1.0 (Draft)
+# WorkforceIQ Data Contract Architecture v1.0 (Draft)
 
 ## Purpose
 
-The purpose of `database.py` is to provide a single interface between WorkforceIQ modules and `workforce.db`.
+The purpose of the WorkforceIQ Data Layer is to isolate database storage details from the rest of the application while allowing modules to exchange data through well-defined contracts.
 
-### Rules
+Per the SDS:
 
-1. Modules never communicate directly with SQLite.
-2. Modules never execute SQL.
-3. Modules communicate with `database.py` using JSON requests.
-4. `database.py` is responsible for CRUD operations.
-5. Business logic remains in Service classes.
-6. Validation remains in Service classes.
-7. `database.py` only performs data storage and retrieval.
+```text
+Routes
+    ↓
+Services
+    ↓
+Repositories
+    ↓
+SQLite
+```
+
+Repository classes form the Data Layer and are responsible for all SQL operations.
+
+Services consume contract/domain objects and never access database tables directly.
 
 ---
 
 # Architecture
 
 ```text
-app.py
+Browser
     ↓
 Routes
     ↓
@@ -27,308 +33,249 @@ Services
     ↓
 Repositories
     ↓
-database.py
-    ↓
-workforce.db
+SQLite
 ```
 
-Example:
+Module communication:
 
 ```text
+SchedulingService
+        ↓
 EmployeeService
-      ↓
+        ↓
 EmployeeRepository
-      ↓
-database.py
-      ↓
-EMPLOYEES table
+        ↓
+SQLite
 ```
+
+Modules communicate through Services.
+
+Repositories communicate with SQLite.
+
+Modules never access another module's tables directly.
 
 ---
 
-# Request Format
+# Layer Responsibilities
 
-All requests sent to `database.py` follow the same structure.
+## Routes
 
-```json
-{
-    "operation": "read",
-    "table": "employees",
-    "filters": {}
-}
-```
-
----
-
-# Supported Operations
-
-## Create
-
-```json
-{
-    "operation": "create",
-    "table": "employees",
-    "data": {
-        "first_name": "John",
-        "last_name": "Smith",
-        "role_id": 2,
-        "hourly_rate": 18.50
-    }
-}
-```
-
----
-
-## Read
-
-### Single Record
-
-```json
-{
-    "operation": "read",
-    "table": "employees",
-    "filters": {
-        "employee_id": 1
-    }
-}
-```
-
-### Filtered Query
-
-```json
-{
-    "operation": "read",
-    "table": "employees",
-    "filters": {
-        "active": true
-    }
-}
-```
-
----
-
-## Update
-
-```json
-{
-    "operation": "update",
-    "table": "employees",
-    "filters": {
-        "employee_id": 1
-    },
-    "data": {
-        "hourly_rate": 20.00
-    }
-}
-```
-
----
-
-## Deactivate (Soft Delete)
-
-```json
-{
-    "operation": "deactivate",
-    "table": "employees",
-    "filters": {
-        "employee_id": 1
-    }
-}
-```
-
-Results in:
-
-```sql
-UPDATE employees
-SET active = false
-WHERE employee_id = 1;
-```
-
----
-
-# Success Response
-
-### Create
-
-```json
-{
-    "status": "success",
-    "record_id": 17
-}
-```
-
-### Read
-
-```json
-{
-    "status": "success",
-    "data": [
-        {
-            "employee_id": 1,
-            "first_name": "John"
-        }
-    ]
-}
-```
-
-### Update
-
-```json
-{
-    "status": "success",
-    "rows_affected": 1
-}
-```
-
----
-
-# Error Response
-
-```json
-{
-    "status": "error",
-    "message": "Employee not found"
-}
-```
-
----
-
-# Employee Management Examples
-
-## Create Employee
-
-```json
-{
-    "operation": "create",
-    "table": "employees",
-    "data": {
-        "first_name": "Ana",
-        "last_name": "Ruiz",
-        "role_id": 2,
-        "hourly_rate": 18.50,
-        "max_hours_per_week": 40,
-        "preferred_hours_per_week": 32,
-        "active": true
-    }
-}
-```
-
-## Get Employee
-
-```json
-{
-    "operation": "read",
-    "table": "employees",
-    "filters": {
-        "employee_id": 7
-    }
-}
-```
-
----
-
-# Availability Management Examples
-
-## Save Availability
-
-```json
-{
-    "operation": "create",
-    "table": "employee_availability",
-    "data": {
-        "employee_id": 7,
-        "start_datetime": "2026-11-13T17:00:00",
-        "end_datetime": "2026-11-13T23:00:00",
-        "available": true
-    }
-}
-```
-
-## Get Availability
-
-```json
-{
-    "operation": "read",
-    "table": "employee_availability",
-    "filters": {
-        "employee_id": 7
-    }
-}
-```
-
----
-
-# Forecasting Examples
-
-## Save Forecast
-
-```json
-{
-    "operation": "create",
-    "table": "forecasts",
-    "data": {
-        "forecast_date": "2026-11-09",
-        "projected_sales": 4820.00,
-        "projected_sales_low": 4210.00,
-        "projected_sales_high": 5430.00,
-        "required_labor_hours": 87.64,
-        "labor_budget": 1349.60
-    }
-}
-```
-
-## Get Forecast
-
-```json
-{
-    "operation": "read",
-    "table": "forecasts",
-    "filters": {
-        "forecast_date": "2026-11-09"
-    }
-}
-```
-
----
-
-# Scheduling Examples
-
-## Add Assignment
-
-```json
-{
-    "operation": "create",
-    "table": "shift_assignments",
-    "data": {
-        "schedule_id": 1,
-        "employee_id": 7,
-        "role_id": 2,
-        "shift_id": 3,
-        "hours": 8,
-        "projected_cost": 148.00
-    }
-}
-```
-
----
-
-# Future Considerations
-
-Potential operations:
+Responsible for:
 
 ```text
-create
-read
-update
-deactivate
-
-bulk_create
-bulk_update
-
-begin_transaction
-commit_transaction
-rollback_transaction
+HTTP requests
+HTTP responses
+Templates
+JSON API responses
+Redirects
 ```
+
+Must not contain:
+
+```text
+SQL
+Business rules
+```
+
+---
+
+## Services
+
+Responsible for:
+
+```text
+Business rules
+Validation
+Calculations
+Workflow logic
+Module-to-module communication
+```
+
+Examples:
+
+```text
+Authentication
+Scheduling rules
+Availability validation
+Forecast calculations
+```
+
+Must not contain:
+
+```text
+SQL
+Database schema knowledge
+```
+
+---
+
+## Repositories
+
+Responsible for:
+
+```text
+SELECT
+INSERT
+UPDATE
+DELETE
+Transactions
+```
+
+Repositories own all SQL operations.
+
+Must not contain:
+
+```text
+Business rules
+Workflow logic
+Authorization decisions
+```
+
+---
+
+## SQLite
+
+Responsible for:
+
+```text
+Data persistence
+Indexes
+Constraints
+Relationships
+Storage
+```
+
+SQLite knows nothing about WorkforceIQ business rules.
+
+---
+
+# Data Contracts
+
+Per SDS Section 8.7:
+
+```text
+Data passes between modules as simple read-only objects
+instead of raw database rows.
+```
+
+Repositories should translate database rows into WorkforceIQ contract objects.
+
+---
+
+# Repository Pattern
+
+## Current State
+
+```text
+SQLite Row
+      ↓
+UserRepository
+      ↓
+sqlite3.Row
+      ↓
+UserService
+```
+
+## SDS-Aligned State
+
+```text
+SQLite Row
+      ↓
+UserRepository
+      ↓
+User Object
+      ↓
+UserService
+```
+
+The Service Layer should never need to know how SQLite stores the data.
+
+---
+
+# User Contract Example
+
+```python
+User(
+    userid=1,
+    username="mdavis",
+    system_role_id=2,
+    employee_id=12
+)
+```
+
+Services consume:
+
+```python
+user.username
+user.system_role_id
+```
+
+rather than:
+
+```python
+row["username"]
+row["system_role_id"]
+```
+
+---
+
+# Repository Example
+
+```python
+def get_user_by_id(self, user_id):
+
+    cursor.execute(...)
+
+    row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    return User(
+        userid=row["userid"],
+        username=row["username"],
+        system_role_id=row["system_role_id"],
+        employee_id=row["employee_id"]
+    )
+```
+
+---
+
+# WorkforceIQ Contract Objects
+
+The SDS currently defines the following contract types:
+
+```text
+User
+Employee
+AvailabilityEntry
+Forecast
+Assignment
+RuleViolation
+AssistantResponse
+```
+
+These objects should be exchanged between Services rather than passing raw database rows between modules.
+
+---
+
+# Connection Management
+
+`connection.py` remains responsible only for:
+
+```python
+get_db_connection()
+```
+
+Responsibilities:
+
+```text
+Open SQLite connection
+Configure connection settings
+Close connection
+```
+
+`connection.py` is infrastructure, not a separate architecture layer.
 
 ---
 
@@ -337,19 +284,67 @@ rollback_transaction
 Each module should focus on:
 
 ```text
-Routes       → User requests
-Services     → Business rules
-Repositories → Build JSON request
-Database     → Execute CRUD
-SQLite       → Store data
+Routes       → User requests and responses
+Services     → Business rules and workflow logic
+Repositories → SQL and object mapping
+SQLite       → Data persistence
 ```
 
-Repositories should never generate SQL directly. Instead, repositories should construct request objects and pass them to `database.py`, making `database.py` the single source of truth for database access.
+Repositories should:
 
-Benefits:
+```text
+Convert SQLite rows to contract objects
+Convert contract objects to SQLite records
+```
 
-- Consistent database access
-- Easier testing
-- Lower module coupling
-- Simpler future migration from SQLite to PostgreSQL
-- Enables parallel development across modules
+Services should:
+
+```text
+Consume contract objects
+Not consume sqlite3.Row objects directly
+```
+
+Modules should communicate through Services and contract objects rather than database tables.
+
+---
+
+# Future Considerations
+
+Potential contract objects:
+
+```text
+User
+Employee
+AvailabilityEntry
+Forecast
+Assignment
+RuleViolation
+AssistantResponse
+```
+
+Potential future improvements:
+
+```text
+Immutable contract objects
+Dataclasses
+Type hints
+Repository unit tests
+SQLite/PostgreSQL portability
+```
+
+---
+
+# Guiding Principle
+
+```text
+Routes handle requests.
+
+Services enforce business rules.
+
+Repositories own SQL and data translation.
+
+SQLite stores data.
+
+Modules exchange contract objects,
+not database rows.
+```
