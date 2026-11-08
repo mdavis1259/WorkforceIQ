@@ -2,13 +2,13 @@ from flask import (render_template, Blueprint)
 from flask_login import login_required
 from forecasting.ForecastService import ForecastService
 
-forecast_bp = Blueprint(
+forecasting_bp = Blueprint(
     "forecast",
     __name__,
     template_folder="templates"
 )
 
-@forecast_bp.route("/forecast")
+@forecasting_bp.route("/forecast")
 @login_required
 def forecast():
 

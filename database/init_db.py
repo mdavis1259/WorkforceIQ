@@ -9,12 +9,22 @@ cursor = conn.cursor()
 
 # Drop existing tables
 # TODO: remove later, only for development purposes
+cursor.execute("DROP TABLE IF EXISTS ShiftAssignments")
+cursor.execute("DROP TABLE IF EXISTS Schedules")
+cursor.execute("DROP TABLE IF EXISTS StaffingRequirements")
+cursor.execute("DROP TABLE IF EXISTS Forecasts")
+cursor.execute("DROP TABLE IF EXISTS DemandHistory")
+cursor.execute("DROP TABLE IF EXISTS TimeOffRequests")
+cursor.execute("DROP TABLE IF EXISTS EmployeeAvailability")
+cursor.execute("DROP TABLE IF EXISTS Shifts")
+cursor.execute("DROP TABLE IF EXISTS Workdays")
+
 cursor.execute("DROP TABLE IF EXISTS EmployeeQualifications")
 cursor.execute("DROP TABLE IF EXISTS Qualifications")
-cursor.execute("DROP TABLE IF EXISTS SystemRoles")
-cursor.execute("DROP TABLE IF EXISTS Roles")
-cursor.execute("DROP TABLE IF EXISTS Employees")
 cursor.execute("DROP TABLE IF EXISTS Users")
+cursor.execute("DROP TABLE IF EXISTS Employees")
+cursor.execute("DROP TABLE IF EXISTS Roles")
+cursor.execute("DROP TABLE IF EXISTS SystemRoles")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS SystemRoles(
@@ -82,12 +92,137 @@ username TEXT NOT NULL UNIQUE,
 password TEXT NOT NULL,
 system_role_id INTEGER NOT NULL DEFAULT 0,
 employee_id INTEGER NOT NULL,
+active INTEGER NOT NULL DEFAULT 1,
+
 CONSTRAINT fk_system_role_id
 FOREIGN KEY (system_role_id)
 REFERENCES SystemRoles(system_role_id),
+
 CONSTRAINT fk_employee_id
 FOREIGN KEY (employee_id)
 REFERENCES Employees(employee_id)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Workdays(
+    workday_id INTEGER PRIMARY KEY,
+    day_name TEXT NOT NULL UNIQUE
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Shifts(
+    shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    shift_name TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS EmployeeAvailability(
+    employee_id INTEGER NOT NULL,
+    workday_id INTEGER NOT NULL,
+    shift_id INTEGER NOT NULL,
+    available INTEGER NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (employee_id, workday_id, shift_id),
+
+    FOREIGN KEY (employee_id)
+        REFERENCES Employees(employee_id),
+
+    FOREIGN KEY (workday_id)
+        REFERENCES Workdays(workday_id),
+    
+    FOREIGN KEY (shift_id)
+        REFERENCES Shifts(shift_id)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS TimeOffRequests(
+    request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    
+    FOREIGN KEY (employee_id)
+        REFERENCES Employees(employee_id)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS DemandHistory(
+    demand_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    demand_date TEXT NOT NULL,
+    sales_amount REAL NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Forecasts(
+    forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    forecast_date TEXT NOT NULL UNIQUE,
+    projected_sales REAL NOT NULL,
+    projected_sales_low REAL NOT NULL,
+    projected_sales_high REAL NOT NULL,
+    required_labor_hours REAL NOT NULL,
+    labor_budget REAL NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS StaffingRequirements(
+    requirement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workday_id INTEGER NOT NULL,
+    shift_id INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    required_count INTEGER NOT NULL,
+    
+    FOREIGN KEY (workday_id)
+        REFERENCES Workdays(workday_id),
+        
+    FOREIGN KEY (shift_id)
+        REFERENCES Shifts(shift_id),
+        
+    FOREIGN KEY (role_id)
+        REFERENCES Roles(role_id)
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS Schedules(
+    schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_start TEXT NOT NULL,
+    status TEXT NOT NULL
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS ShiftAssignments(
+    assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    schedule_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    role_id INTEGER NOT NULL,
+    shift_id INTEGER NOT NULL,
+
+    schedule_date TEXT NOT NULL,
+    hours REAL NOT NULL,
+
+    FOREIGN KEY (schedule_id)
+        REFERENCES Schedules(schedule_id),
+
+    FOREIGN KEY (employee_id)
+        REFERENCES Employees(employee_id),
+
+    FOREIGN KEY (role_id)
+        REFERENCES Roles(role_id),
+
+    FOREIGN KEY (shift_id)
+        REFERENCES Shifts(shift_id)
 )
 """)
 
@@ -164,6 +299,36 @@ cursor.executemany(
         ('admin', generate_password_hash('password'), 3, 3),
     ],
 )
+
+cursor.executemany(
+    """
+    INSERT INTO Workdays (workday_id, day_name)
+    VALUES (?, ?)
+    """,
+    [
+        (1, "Monday"),
+        (2, "Tuesday"),
+        (3, "Wednesday"),
+        (4, "Thursday"),
+        (5, "Friday"),
+        (6, "Saturday"),
+        (7, "Sunday"),
+    ]
+)
+
+cursor.executemany(
+    """
+    INSERT INTO Shifts
+    (shift_name, start_time, end_time)
+    VALUES (?, ?, ?)
+    """,
+    [
+        ("Morning", "06:00", "14:00"),
+        ("Afternoon", "14:00", "22:00"),
+        ("Night", "22:00", "06:00"),
+    ]
+)
+
 conn.commit()
 conn.close()
 

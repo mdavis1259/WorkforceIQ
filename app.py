@@ -5,8 +5,10 @@ from database.connection import get_db_connection
 
 from employee_management.EmployeeRoutes import employee_bp
 from authentication.AuthRoutes import auth_bp
-from forecasting.ForecastingRoutes import forecast_bp
-from ai_assistant.AssistantRoutes import assistant_bp
+from availability_management.AvailabilityRoutes import availability_bp
+from forecasting.ForecastingRoutes import forecasting_bp
+from scheduling.SchedulingRoutes import scheduling_bp
+from ai_assistant.AssistantRoutes import ai_bp
 
 from user_management.User import User
 from user_management.UserService import UserService
@@ -20,8 +22,10 @@ app = Flask(__name__)
 app.config["DATABASE"] = "database/workforce.db"
 app.register_blueprint(auth_bp)
 app.register_blueprint(employee_bp)
-app.register_blueprint(forecast_bp)
-app.register_blueprint(assistant_bp)
+app.register_blueprint(availability_bp)
+app.register_blueprint(forecasting_bp)
+app.register_blueprint(scheduling_bp)
+app.register_blueprint(ai_bp)
 app.secret_key = (
     app.config.get("SECRET_KEY")
     or "development-key-change-in-production"

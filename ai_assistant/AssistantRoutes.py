@@ -2,14 +2,14 @@ from flask import request, render_template, Blueprint
 from flask_login import login_required
 from ai_assistant.AssistantService import AssistantService
 
-assistant_bp = Blueprint(
+ai_bp = Blueprint(
     "assistant",
     __name__,
     template_folder="templates"
 )
 
 
-@assistant_bp.route("/ai", methods=["GET", "POST"])
+@ai_bp.route("/ai", methods=["GET", "POST"])
 @login_required
 def ai_assistant():
     response = ""

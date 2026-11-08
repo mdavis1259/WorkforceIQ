@@ -1,1 +1,7 @@
-# TODO: Implement Scheduling Routes
+from flask import Blueprint
+
+scheduling_bp = Blueprint(
+    "scheduling",
+    __name__,
+    template_folder="templates"
+)
