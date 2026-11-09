@@ -2,8 +2,8 @@ import sqlite3
 import unittest
 
 from errors import NotFoundError, ValidationError
-from repositories.employee_repository import EmployeeRepository
-from services.employee_service import EmployeeService
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
 
 SCHEMA = """
 CREATE TABLE Roles(

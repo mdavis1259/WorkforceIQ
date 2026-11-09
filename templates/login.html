@@ -16,7 +16,7 @@
 		</div>
 		{% endif %}
 
-                <form action="{{ url_for('login') }}" method="POST">
+                <form action="{{ url_for('auth.login') }}" method="POST">
                     <div class="form-group">
                         <label>Username</label>
                         <input
@@ -60,7 +60,7 @@
                 {% endif %}
 
                 <form
-                    action="{{ url_for('register') }}"
+                    action="{{ url_for('auth.register') }}"
                     method="POST"
                     class="registration-form"
                 >
