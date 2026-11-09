@@ -70,6 +70,22 @@ class WorkforceIQTestCase(unittest.TestCase):
                 FOREIGN KEY (system_role_id) REFERENCES SystemRoles(system_role_id),
                 FOREIGN KEY (employee_id) REFERENCES Employees(employee_id)
             );
+
+            CREATE TABLE DemandHistory(
+                demand_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                demand_date TEXT NOT NULL,
+                sales_amount REAL NOT NULL
+            );
+
+            CREATE TABLE Forecasts(
+                forecast_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                forecast_date TEXT NOT NULL UNIQUE,
+                projected_sales REAL NOT NULL,
+                projected_sales_low REAL NOT NULL,
+                projected_sales_high REAL NOT NULL,
+                required_labor_hours REAL,
+                labor_budget REAL NOT NULL
+            );
         """)
 
         connection.executemany(
@@ -93,6 +109,24 @@ class WorkforceIQTestCase(unittest.TestCase):
                 (2, "Carol", "Example", 22.5),
             ],
         )
+
+        connection.executemany(
+        """
+        INSERT INTO DemandHistory
+        (demand_date, sales_amount)
+        VALUES (?, ?)
+        """,
+        [
+            ("2026-11-01", 4500),
+            ("2026-11-02", 4700),
+            ("2026-11-03", 6200),
+            ("2026-11-04", 5900),
+            ("2026-11-05", 4600),
+            ("2026-11-06", 4550),
+            ("2026-11-07", 4800),
+        ]
+    )
+
         # The "test" login belongs to Bob (an Associate)
         connection.execute(
             "INSERT INTO Users(username, password, system_role_id, employee_id) VALUES (?, ?, ?, ?)",
@@ -149,13 +183,24 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertIn("Name: Bob Example, Role: Associate, Wage: $20.0/hr", context)
         self.assertIn("Name: Carol Example, Role: Associate, Wage: $22.5/hr", context)
 
-    # TODO: redo this once we have real forcasting module
-    @unittest.skip("Moved to ForecastService tests")
-    def test_generate_forecast_returns_expected_value(self):
-        # Based on static data, should be calculated for real tests
-        expected_forecast = 200
-        actual_forecast = app_module.generate_forecast()
-        self.assertEqual(actual_forecast, expected_forecast)
+    def test_forecast_module_generates_14_day_forecast(self):
+
+        from database.connection import get_db_connection
+        from forecasting.ForecastRepository import ForecastRepository
+        from forecasting.ForecastService import ForecastService
+
+        connection = app_module.get_db_connection()
+
+        try:
+            repository = ForecastRepository(connection)
+            service = ForecastService(repository)
+
+            forecasts = service.generate_two_week_forecast()
+
+            self.assertEqual(len(forecasts), 14)
+
+        finally:
+            connection.close()
 
     # TODO: expand into more tests
     @unittest.skip("Moved to AssistantService tests")
@@ -342,13 +387,39 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Associate", response.data)
 
-    # TODO: change test when data isn't hardcoded and forecast() is implemented
-    @unittest.skip("Moved to Forecastservice tests")
-    def test_forecast_accuracy(self):
-        expected_forecast = 200 / 30
-        actual_forecast = app_module.generate_forecast() / 30
-        self.assertAlmostEqual(expected_forecast, actual_forecast)
+    def test_forecast_page_loads_for_authenticated_user(self):
+        """
+        Verify that the forecast page renders
+        for authenticated users.
+        """
 
+        self.login_as_test_user()
 
+        response = self.client.get("/forecast")
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertIn(
+            b"Two-Week Staffing Forecast",
+            response.data
+        )
+
+    def test_forecast_page_contains_labor_budget(self):
+        """
+        Verify that labor budget information
+        is displayed on the forecast page.
+        """
+
+        self.login_as_test_user()
+
+        response = self.client.get("/forecast")
+
+        self.assertEqual(response.status_code, 200)
+
+        self.assertIn(
+            b"Projected Labor Budget",
+            response.data
+        )
+    
 if __name__ == "__main__":
     unittest.main()

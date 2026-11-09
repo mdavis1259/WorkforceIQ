@@ -6,7 +6,7 @@ from database.connection import get_db_connection
 from employee_management.EmployeeRoutes import employee_bp
 from authentication.AuthRoutes import auth_bp
 from availability_management.AvailabilityRoutes import availability_bp
-from forecasting.ForecastingRoutes import forecasting_bp
+from forecasting.ForecastRoutes import forecasting_bp
 from scheduling.SchedulingRoutes import scheduling_bp
 from ai_assistant.AssistantRoutes import ai_bp
 
