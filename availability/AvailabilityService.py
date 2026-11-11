@@ -1,7 +1,8 @@
-def formatAvailabilityData(availability_tuples):
+def availabilityDBtoEvents(availability_tuples):
     formatted_data = []
     for item in availability_tuples:
         formatted_dict = {
+            'id': item['employee_availability_id'],
             'title': item['shift_name'],
             'start': item['start_time'],
             'end': item['end_time'],
