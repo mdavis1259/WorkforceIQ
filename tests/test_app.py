@@ -67,6 +67,23 @@ class WorkforceIQTestCase(unittest.TestCase):
                 FOREIGN KEY (system_role_id) REFERENCES SystemRoles(system_role_id),
                 FOREIGN KEY (employee_id) REFERENCES Employees(employee_id)
             );
+
+            CREATE TABLE Shifts(
+                shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_name TEXT NOT NULL,
+                start_time TIME NOT NULL,
+                end_time TIME NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE EmployeeAvailability(
+                employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                shift_id INTEGER NOT NULL,
+                availability INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
+                FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id)
+            );
         """)
 
         connection.executemany(
@@ -94,6 +111,14 @@ class WorkforceIQTestCase(unittest.TestCase):
         connection.execute(
             "INSERT INTO Users(username, password, system_role_id, employee_id) VALUES (?, ?, ?, ?)",
             ("test", generate_password_hash("password123"), 1, 2),
+        )
+        connection.execute(
+            "INSERT INTO Shifts(shift_name, start_time, end_time) VALUES (?, ?, ?)",
+            ("Test Shift", "2026-11-10T08:00:00", "2026-11-10T12:00:00"),
+        )
+        connection.execute(
+            "INSERT INTO EmployeeAvailability(employee_id, shift_id, availability) VALUES (?, ?, ?)",
+            (2, 1, 1),
         )
 
         connection.commit()
@@ -177,6 +202,97 @@ class WorkforceIQTestCase(unittest.TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.location, "/dashboard")
+
+    def test_availability_calendar_renders_database_events(self):
+        self.login_as_test_user()
+
+        response = self.client.get("/availability")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"title: 'Test Shift'", response.data)
+        self.assertIn(b"start: '2026-11-10T08:00:00'", response.data)
+        self.assertIn(b'<form method="dialog">', response.data)
+        self.assertIn(b'id="closeModalBtn" type="submit"', response.data)
+        self.assertIn(b'id="modalTitle" type="text"', response.data)
+        self.assertIn(b'id="modalStart" type="datetime-local"', response.data)
+        self.assertIn(b'id="modalEnd" type="datetime-local"', response.data)
+        self.assertIn(b'id="modalAvailable" type="checkbox"', response.data)
+        self.assertIn(b'dateClick: function(info)', response.data)
+        self.assertIn(b'openCreateEventModal(info.date)', response.data)
+
+    def test_availability_updates_accept_calendar_callback_payloads(self):
+        callback_payloads = [
+            {
+                "id": 1,
+                "start": "2026-11-10T09:00:00",
+                "end": "2026-11-10T13:00:00",
+            },
+            {
+                "id": 1,
+                "start": "2026-11-10T10:00:00",
+                "end": "2026-11-10T14:00:00",
+            },
+            {
+                "id": 1,
+                "title": "Updated Test Shift",
+                "start": "2026-11-10T11:00:00",
+                "end": "2026-11-10T15:00:00",
+                "availability": 0,
+            },
+        ]
+
+        for payload in callback_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post("/availability", json=payload)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json()["status"], "success")
+
+        connection = sqlite3.connect(self.database_path)
+        shift = connection.execute(
+            "SELECT shift_name, start_time, end_time FROM Shifts WHERE shift_id = 1"
+        ).fetchone()
+        availability = connection.execute(
+            "SELECT availability FROM EmployeeAvailability WHERE employee_availability_id = 1"
+        ).fetchone()[0]
+        connection.close()
+
+        self.assertEqual(
+            shift,
+            ("Updated Test Shift", "2026-11-10T11:00:00", "2026-11-10T15:00:00"),
+        )
+        self.assertEqual(availability, 0)
+
+    def test_availability_can_be_created_for_logged_in_employee(self):
+        self.login_as_test_user()
+
+        response = self.client.post(
+            "/availability",
+            json={
+                "title": "New Shift",
+                "start": "2026-11-11T09:00:00",
+                "end": "2026-11-11T10:00:00",
+                "availability": 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        created_id = response.get_json()["id"]
+        connection = sqlite3.connect(self.database_path)
+        created = connection.execute(
+            """
+            SELECT s.shift_name, s.start_time, s.end_time, ea.availability, ea.employee_id
+            FROM EmployeeAvailability ea
+            JOIN Shifts s ON s.shift_id = ea.shift_id
+            WHERE ea.employee_availability_id = ?
+            """,
+            (created_id,),
+        ).fetchone()
+        connection.close()
+
+        self.assertEqual(
+            created,
+            ("New Shift", "2026-11-11T09:00:00", "2026-11-11T10:00:00", 1, 2),
+        )
 
     # Check that invalid credentials are rejected
     def test_invalid_credentials_are_rejected(self):

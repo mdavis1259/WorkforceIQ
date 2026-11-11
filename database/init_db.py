@@ -151,6 +151,36 @@ cursor.executemany(
         ('admin', generate_password_hash('password'), 3, 3),
     ],
 )
+
+cursor.executemany(
+    """
+    INSERT INTO Shifts (shift_name, start_time, end_time, active)
+    VALUES (?, ?, ?, ?)
+    """,
+    [
+        ('Morning Shift', '2026-11-10T08:00:00', '2026-11-10T12:00:00', 1),
+        ('Afternoon Shift', '2026-11-10T12:00:00', '2026-11-10T16:00:00', 1),
+        ('Evening Shift', '2026-11-10T16:00:00', '2026-11-10T20:00:00', 1),
+    ],
+)
+
+cursor.executemany(
+    """
+    INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
+    VALUES (?, ?, ?)
+    """,
+    [
+        (1, 1, 1),
+        (1, 2, 0),
+        (1, 3, 1),
+        (2, 1, 1),
+        (2, 2, 1),
+        (2, 3, 0),
+        (3, 1, 0),
+        (3, 2, 1),
+        (3, 3, 1),
+    ],
+)
 conn.commit()
 conn.close()
 
