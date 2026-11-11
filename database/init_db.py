@@ -17,7 +17,6 @@ cursor.execute("DROP TABLE IF EXISTS DemandHistory")
 cursor.execute("DROP TABLE IF EXISTS TimeOffRequests")
 cursor.execute("DROP TABLE IF EXISTS EmployeeAvailability")
 cursor.execute("DROP TABLE IF EXISTS Shifts")
-cursor.execute("DROP TABLE IF EXISTS Workdays")
 
 cursor.execute("DROP TABLE IF EXISTS EmployeeQualifications")
 cursor.execute("DROP TABLE IF EXISTS Qualifications")
@@ -105,13 +104,6 @@ REFERENCES Employees(employee_id)
 """)
 
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS Workdays(
-    workday_id INTEGER PRIMARY KEY,
-    day_name TEXT NOT NULL UNIQUE
-)
-""")
-
-cursor.execute("""
 CREATE TABLE IF NOT EXISTS Shifts(
     shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
     shift_name TEXT NOT NULL,
@@ -122,34 +114,18 @@ CREATE TABLE IF NOT EXISTS Shifts(
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS EmployeeAvailability(
+    employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT
     employee_id INTEGER NOT NULL,
-    workday_id INTEGER NOT NULL,
     shift_id INTEGER NOT NULL,
     available INTEGER NOT NULL DEFAULT 0,
 
-    PRIMARY KEY (employee_id, workday_id, shift_id),
-
     FOREIGN KEY (employee_id)
         REFERENCES Employees(employee_id),
-
-    FOREIGN KEY (workday_id)
-        REFERENCES Workdays(workday_id),
     
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id)
-)
-""")
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS TimeOffRequests(
-    request_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_id INTEGER NOT NULL,
-    start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
-    status TEXT NOT NULL,
-    
-    FOREIGN KEY (employee_id)
-        REFERENCES Employees(employee_id)
+    CONSTRAINT avail_bool CHECK IN 
 )
 """)
 
@@ -176,14 +152,10 @@ CREATE TABLE IF NOT EXISTS Forecasts(
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS StaffingRequirements(
     requirement_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    workday_id INTEGER NOT NULL,
     shift_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
     required_count INTEGER NOT NULL,
-    
-    FOREIGN KEY (workday_id)
-        REFERENCES Workdays(workday_id),
-        
+            
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id),
         
@@ -329,18 +301,6 @@ cursor.executemany(
 
 cursor.executemany(
     """
-    INSERT INTO Workdays (workday_id, day_name)
-    VALUES (?, ?)
-    """,
-    [
-        (1, "Monday"),
-        (2, "Tuesday"),
-        (3, "Wednesday"),
-        (4, "Thursday"),
-        (5, "Friday"),
-        (6, "Saturday"),
-        (7, "Sunday"),
-    ]
     INSERT INTO Shifts (shift_name, start_time, end_time, active)
     VALUES (?, ?, ?, ?)
     """,
