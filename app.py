@@ -1,11 +1,11 @@
-from flask import Flask, render_template, request
+from flask import Flask, g, render_template, request
 from flask_login import LoginManager, login_required, current_user
 
 from database.connection import get_db_connection
 
 from employee_management.EmployeeRoutes import employee_bp
 from authentication.AuthRoutes import auth_bp
-from availability_management.AvailabilityRoutes import availability_bp
+from availability.AvailabilityRoutes import availability_bp
 from forecasting.ForecastRoutes import forecasting_bp
 from scheduling.SchedulingRoutes import scheduling_bp
 from ai_assistant.AssistantRoutes import ai_bp
@@ -24,14 +24,6 @@ app = Flask(__name__)
 app.config["DATABASE"] = "database/workforce.db"
 
 # =============================================
-# USER MANAGEMENT DEPENDENCIES
-# =============================================
-user_conn = get_db_connection()
-user_repository = UserRepository(user_conn)
-user_service = UserService(user_repository)
-configure_user_routes(user_service)
-
-# =============================================
 # REGISTER BLUEPRINTS
 # =============================================
 app.register_blueprint(auth_bp)
@@ -45,7 +37,6 @@ app.secret_key = (
     app.config.get("SECRET_KEY")
     or "development-key-change-in-production"
 )
-app.register_blueprint(avail)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "auth.login"

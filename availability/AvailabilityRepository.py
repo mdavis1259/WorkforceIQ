@@ -9,7 +9,7 @@ def get_availability():
 
     cursor.execute(
                    """
-                   SELECT ea.*, s.shift_name, s.start_time, s.end_time, s.active
+                   SELECT ea.*, s.shift_name, s.start_time, s.end_time,
                    FROM EmployeeAvailability AS ea
                    JOIN Shifts AS s ON s.shift_id = ea.shift_id
                    """)
@@ -23,10 +23,10 @@ def get_employee_availability(employee_id):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Get: EmpAvailID, EmpID, Availability, ShiftName, StartTime, EndTime, Active
+    # Get: EmpAvailID, EmpID, Availability, ShiftName, StartTime, EndTime
     cursor.execute(
                    """
-                   SELECT ea.*, s.shift_name, s.start_time, s.end_time, s.active
+                   SELECT ea.*, s.shift_name, s.start_time, s.end_time
                    FROM EmployeeAvailability AS ea
                    JOIN Shifts AS s ON s.shift_id = ea.shift_id
                    WHERE ea.employee_id = ?

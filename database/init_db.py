@@ -107,25 +107,8 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS Shifts(
     shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
     shift_name TEXT NOT NULL,
-    start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL
-)
-""")
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS EmployeeAvailability(
-    employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT
-    employee_id INTEGER NOT NULL,
-    shift_id INTEGER NOT NULL,
-    available INTEGER NOT NULL DEFAULT 0,
-
-    FOREIGN KEY (employee_id)
-        REFERENCES Employees(employee_id),
-    
-    FOREIGN KEY (shift_id)
-        REFERENCES Shifts(shift_id)
-
-    CONSTRAINT avail_bool CHECK IN 
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL
 )
 """)
 
@@ -196,15 +179,6 @@ CREATE TABLE IF NOT EXISTS ShiftAssignments(
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id)
 )
-    CREATE TABLE IF NOT EXISTS Shifts(
-        shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        shift_name TEXT NOT NULL,
-        start_time TIME NOT NULL,
-        end_time TIME NOT NULL,
-        active INTEGER NOT NULL DEFAULT 1
-        CONSTRAINT boolean_active
-                    CHECK (active IN (0, 1))
-    )
 """)
 
 cursor.execute("""
@@ -301,18 +275,16 @@ cursor.executemany(
 
 cursor.executemany(
     """
-    INSERT INTO Shifts (shift_name, start_time, end_time, active)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO Shifts (shift_name, start_time, end_time)
+    VALUES (?, ?, ?)
     """,
     [
-        ('Morning Shift', '2026-11-10T08:00:00', '2026-11-10T12:00:00', 1),
-        ('Afternoon Shift', '2026-11-10T12:00:00', '2026-11-10T16:00:00', 1),
-        ('Evening Shift', '2026-11-10T16:00:00', '2026-11-10T20:00:00', 1),
+        ('Morning Shift', '2026-11-10T08:00:00', '2026-11-10T12:00:00'),
+        ('Afternoon Shift', '2026-11-10T12:00:00', '2026-11-10T16:00:00'),
+        ('Evening Shift', '2026-11-10T16:00:00', '2026-11-10T20:00:00'),
     ],
 )
 
-cursor.executemany(
-    """
 cursor.executemany(
     """
     INSERT INTO DemandHistory
@@ -359,9 +331,11 @@ cursor.executemany(
         ("2026-11-02", 5000),
         ("2026-11-03", 4950),
         ("2026-11-04", 5200),
-    ]
+    ],
 )
 
+cursor.executemany(
+    """
     INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
     VALUES (?, ?, ?)
     """,

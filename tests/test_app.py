@@ -180,7 +180,8 @@ class WorkforceIQTestCase(unittest.TestCase):
         expected_result = expected_cursor.fetchone()
         expected_connection.close()
 
-        actual_connection = app_module.get_db_connection()
+        with app.app_context():
+            actual_connection = app_module.get_db_connection()
         actual_cursor = actual_connection.cursor()
         actual_cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'"
@@ -214,7 +215,8 @@ class WorkforceIQTestCase(unittest.TestCase):
         from forecasting.ForecastRepository import ForecastRepository
         from forecasting.ForecastService import ForecastService
 
-        connection = app_module.get_db_connection()
+        with app.app_context():
+            connection = app_module.get_db_connection()
 
         try:
             repository = ForecastRepository(connection)

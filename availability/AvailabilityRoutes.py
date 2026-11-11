@@ -8,9 +8,9 @@ from availability.AvailabilityService import availabilityDBtoEvents
 from flask import Blueprint, render_template, request, jsonify
 from flask_login import current_user
 
-avail = Blueprint('availability', __name__, template_folder='templates')
+availability_bp = Blueprint('availability', __name__, template_folder='templates')
 
-@avail.route('/availability', methods=["GET", "POST", "DELETE"])
+@availability_bp.route('/availability', methods=["GET", "POST", "DELETE"])
 def availability():
     if request.method == "POST":
         data = request.get_json()
