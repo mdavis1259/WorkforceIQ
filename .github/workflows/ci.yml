@@ -6,6 +6,7 @@ on:
   pull_request:
 
 jobs:
+
   test:
 
     runs-on: ubuntu-latest
@@ -28,6 +29,25 @@ jobs:
       - name: Initialize Database
         run: |
           python database/init_db.py
+
+      - name: Verify Database Files
+        run: |
+          pwd
+          find . -name "*.db"
+
+      - name: Show Database Directory
+        run: |
+          ls -R database
+
+      - name: Verify DemandHistory Table
+        run: |
+          python -c "
+          import sqlite3
+          conn = sqlite3.connect('database/workforce.db')
+          cursor = conn.cursor()
+          cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")
+          print(cursor.fetchall())
+          "
 
       - name: Run Unit Tests
         run: |
