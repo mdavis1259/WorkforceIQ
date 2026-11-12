@@ -8,8 +8,12 @@
 <body>
     <nav class="navbar">
         <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <span class="navbar-text">Schedule</span>
+        <a href="{{ url_for('availability.availability') if current_user.system_role_id == 1 else url_for('availability.avail_select') }}">Availability</a>
         <a href="{{ url_for('employee.employees') }}">Employees</a>
-        <a href="{{ url_for('forecast.forecast') }}">Forecast</a>
+        <span class="navbar-text" {% if current_user.system_role_id != 3 %}hidden=true{% endif %}>Users</span>
+        <a href="{{ url_for('forecast.forecast') }}" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Forecast</a>
+        <span class="navbar-text" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Reports</span>
         <a href="{{ url_for('assistant.ai_assistant') }}">AI Assistant</a>
         {% if current_user.is_authenticated %}
         <span class="navbar-username">{{ current_user.username }}</span>
