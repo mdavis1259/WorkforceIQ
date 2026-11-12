@@ -8,7 +8,8 @@ from employee_management.EmployeeService import EmployeeService
 SCHEMA = """
 CREATE TABLE Roles(
     role_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    role_name TEXT NOT NULL UNIQUE);
+    role_name TEXT NOT NULL UNIQUE,
+    system_role_id INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE Employees(
     employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
     role_id INTEGER NOT NULL,
@@ -25,7 +26,7 @@ CREATE TABLE EmployeeQualifications(
     employee_id INTEGER NOT NULL,
     qualification_id INTEGER NOT NULL,
     PRIMARY KEY (employee_id, qualification_id));
-INSERT INTO Roles (role_name) VALUES ('Cashier'), ('Cook');
+INSERT INTO Roles (role_name, system_role_id) VALUES ('Cashier', 1), ('Cook', 2);
 INSERT INTO Qualifications (qualification_name)
     VALUES ('Cash Handling'), ('Food Handler');
 """
@@ -208,6 +209,13 @@ class EmployeeServiceTests(unittest.TestCase):
                  for e in self.service.list_employees()]
         self.assertEqual(names, [("Adams", "Amy"), ("Adams", "Zed"),
                                  ("Baker", "Bob")])
+
+    # ----- roles and qualifications lists -------------------------
+    def test_roles_include_their_access_level(self):
+        roles = self.service.list_roles()
+        self.assertEqual(
+            [(r["role_name"], r["system_role_id"]) for r in roles],
+            [("Cashier", 1), ("Cook", 2)])
 
     # ----- output hiding ------------------------------------------
     def test_rate_can_be_hidden_for_employee_role(self):

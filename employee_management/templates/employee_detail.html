@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "_employee_styles.html" %}
+<div class="dashboard">
+
+    <h1>{{ employee.first_name }} {{ employee.last_name }}</h1>
+
+    {% include "_messages.html" %}
+
+    <div class="page-card emp-detail">
+
+        {% if not employee.active %}
+        <div class="error-message">This employee is inactive.</div>
+        {% endif %}
+
+        <dl>
+            <dt>Job role</dt>
+            <dd>{{ employee.role_name }}</dd>
+
+            <dt>Account level</dt>
+            <dd>{{ employee.access_level }}</dd>
+
+            <dt>Status</dt>
+            <dd>{% if employee.active %}Active{% else %}Inactive{% endif %}</dd>
+
+            <dt>Hourly wage</dt>
+            <dd>
+                {% if employee.hourly_rate is not none %}
+                    ${{ "%.2f"|format(employee.hourly_rate) }}
+                {% else %}
+                    Hidden for your account
+                {% endif %}
+            </dd>
+
+            <dt>Max hours per week</dt>
+            <dd>{{ employee.max_hours_per_week }}</dd>
+
+            <dt>Preferred hours per week</dt>
+            <dd>{{ employee.preferred_hours_per_week }}</dd>
+
+            <dt>Qualifications</dt>
+            <dd>
+                {% if employee.qualifications %}
+                    {{ employee.qualifications | join(", ") }}
+                {% else %}
+                    None
+                {% endif %}
+            </dd>
+        </dl>
+
+        <div class="emp-actions">
+            {% if is_manager %}
+            <a class="emp-btn emp-btn-primary" href="{{ url_for('employee.edit_employee', employee_id=employee.employee_id) }}">Edit</a>
+            {% if employee.active %}
+            <form
+                method="POST"
+                action="{{ url_for('employee.deactivate_employee_page', employee_id=employee.employee_id) }}"
+                onsubmit="return confirm('Deactivate this employee? They will no longer appear in the default list.');"
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="emp-btn emp-btn-danger">Deactivate</button>
+            </form>
+            {% endif %}
+            {% endif %}
+            <a class="emp-btn" href="{{ url_for('employee.employees') }}">Back to list</a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

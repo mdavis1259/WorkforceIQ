@@ -1,0 +1,8 @@
+{# Shows "saved" / "added" messages set with flash(). Other flash categories (such as the login reminder) are ignored. #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+        {% if category in ("success", "error") %}
+        <div class="emp-flash emp-flash-{{ category }}">{{ message }}</div>
+        {% endif %}
+    {% endfor %}
+{% endwith %}
