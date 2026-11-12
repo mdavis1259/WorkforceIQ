@@ -115,8 +115,11 @@ class EmployeeRepository:
         return cursor.fetchone() is not None
 
     def list_roles(self):
+        """Job roles. system_role_id is the access level the role maps to
+        (1 Associate, 2 Manager, 3 Administrator)."""
         cursor = self.conn.execute(
-            "SELECT role_id, role_name FROM Roles ORDER BY role_name"
+            "SELECT role_id, role_name, system_role_id "
+            "FROM Roles ORDER BY role_name"
         )
         return _rows(cursor)
 

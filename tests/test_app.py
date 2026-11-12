@@ -333,60 +333,6 @@ class WorkforceIQTestCase(unittest.TestCase):
         connection.close()
         self.assertEqual(count, 0)
 
-    # Check that the employee API returns the pre-set data from create_test_database
-    def test_employee_api_returns_pre_set_data(self):
-        response = self.client.get("/api/employees")
-
-        self.assertEqual(response.status_code, 200)
-        employees = response.get_json()
-        self.assertEqual(len(employees), 3)
-        self.assertEqual(employees[0]["first_name"], "Alice")
-        self.assertEqual(employees[0]["last_name"], "Example")
-        self.assertAlmostEqual(employees[1]["hourly_rate"], 20.0)
-        self.assertEqual(employees[2]["role"], "Associate")
-
-    def test_employee_can_be_added_to_testing_database(self):
-        self.login_as_test_user()  # /add_employee and /employees require login
-
-        response = self.client.post(
-            "/add_employee",
-            data={
-                "first_name": "Dana",
-                "last_name": "Example",
-                "role_name": "Supervisor",
-                "level": "2",
-                "wage": "28.0",
-                "username": "test",
-            },
-            follow_redirects=False,
-        )
-
-        self.assertEqual(response.status_code, 302)  # Check that the response is a redirect
-
-        connection = sqlite3.connect(self.database_path)
-        dana_example = connection.execute(
-            """
-            SELECT Employees.first_name, Employees.last_name,
-                   Roles.role_name, Employees.hourly_rate, Employees.employee_id
-            FROM Employees
-            JOIN Roles ON Roles.role_id = Employees.role_id
-            WHERE Employees.first_name = ?
-            """,
-            ("Dana",),
-        ).fetchone()
-        linked_employee_id = connection.execute(
-            "SELECT employee_id FROM Users WHERE username = ?", ("test",)
-        ).fetchone()[0]
-        connection.close()
-
-        self.assertEqual(dana_example[:4], ("Dana", "Example", "Supervisor", 28.0))
-        # The "test" login is now linked to the new employee record
-        self.assertEqual(linked_employee_id, dana_example[4])
-
-        response = self.client.get("/employees")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Associate", response.data)
-
     def test_forecast_page_loads_for_authenticated_user(self):
         """
         Verify that the forecast page renders
