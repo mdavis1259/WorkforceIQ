@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h2>Shift Management</h2>
+
+<h3>Shifts</h3>
+
+<table>
+    <tr>
+        <th>Name</th>
+        <th>Start</th>
+        <th>End</th>
+    </tr>
+
+    {% for shift in shifts %}
+    <tr>
+        <td>{{ shift.shift_name }}</td>
+        <td>{{ shift.start_time }}</td>
+        <td>{{ shift.end_time }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h3>Staffing Requirements</h3>
+
+<table>
+    <tr>
+        <th>Day</th>
+        <th>Shift</th>
+        <th>Role</th>
+        <th>Required</th>
+    </tr>
+
+    {% for requirement in requirements %}
+    <tr>
+        <td>{{ requirement.day_name }}</td>
+        <td>{{ requirement.shift_name }}</td>
+        <td>{{ requirement.role_name }}</td>
+        <td>{{ requirement.required_count }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+{% endblock %}
