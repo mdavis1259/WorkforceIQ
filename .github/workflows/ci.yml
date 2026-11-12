@@ -30,7 +30,6 @@ jobs:
         run: |
           python database/init_db.py
 
-<<<<<<< HEAD
       - name: Verify Database Files
         run: |
           pwd
@@ -50,8 +49,6 @@ jobs:
           print(cursor.fetchall())
           "
 
-=======
->>>>>>> b7173b1 (DEVOPS initialize database in CI pipeline)
       - name: Run Unit Tests
         run: |
           python -m unittest discover -s tests -p "test_*.py"
