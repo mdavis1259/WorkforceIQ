@@ -41,16 +41,21 @@ def shift_management():
 
         shifts = service.list_shifts()
 
-        requirements = (
-            service.list_staffing_requirements()
-        )
+        requirements = service.list_staffing_requirements()
+
+        workdays = service.list_workdays()
 
         return render_template(
             "shift_management.html",
             shifts=shifts,
-            requirements=requirements
+            requirements=requirements,
+            workdays=workdays
         )
 
     finally:
         conn.close()
         
+@scheduling_bp.route("/shift_management/create_shift", methods=["POST"])
+@login_required
+def create_shift():
+    pass

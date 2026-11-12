@@ -4,6 +4,28 @@
 
 <h2>Shift Management</h2>
 
+<h3>Workdays</h3>
+
+<table>
+    <tr>
+        <th>Day</th>
+        <th>Active</th>
+    </tr>
+
+    {% for day in workdays %}
+    <tr>
+        <td>{{ day.day_name }}</td>
+        <td>
+            {% if day.active %}
+                Yes
+            {% else %}
+                No
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
 <h3>Shifts</h3>
 
 <table>
