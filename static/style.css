@@ -209,6 +209,11 @@ dialog::backdrop {
     color: white;
 }
 
+#cancelCreateEventBtn {
+    background: #e0e0e0;
+    color: var(--text);
+}
+
 #deleteEventBtn {
     background: #d32f2f;
     color: white;

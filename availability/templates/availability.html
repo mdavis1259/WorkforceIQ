@@ -54,6 +54,7 @@
                 <input id="modalAvailable" type="checkbox">
             </div>
             <div class="availability-modal-actions">
+                <button id="cancelCreateEventBtn" type="button" hidden>Cancel</button>
                 <button id="closeModalBtn" type="submit">Close</button>
                 <button id="deleteEventBtn" onclick="removeEvent(selectedEvent)" type="button">
                     Delete
@@ -72,6 +73,7 @@
         let recurrenceField = document.getElementById('recurrenceField');
         let recurrenceUntilField = document.getElementById('recurrenceUntilField');
         let availableInput = document.getElementById('modalAvailable');
+        let cancelCreateEventButton = document.getElementById('cancelCreateEventBtn');
         let closeModalButton = document.getElementById('closeModalBtn');
         let addEventButton = document.getElementById('addEventBtn');
         let deleteEventButton = document.getElementById('deleteEventBtn');
@@ -192,11 +194,17 @@
             //Set available to true, no delete option
             availableInput.checked = true;
             deleteEventButton.hidden = true;
+            cancelCreateEventButton.hidden = false;
 
             //Get correct modal button "Save", then show
             updateModalButton();
             modal.showModal();
         }
+
+        cancelCreateEventButton.addEventListener('click', function() {
+            creatingEvent = false;
+            modal.close();
+        });
 
         // On click of "add event," call above function
         addEventButton.addEventListener('click', function() {
@@ -375,6 +383,7 @@
                 recurrenceInput.value = 'none';
                 recurrenceUntilInput.value = '';
                 recurrenceField.hidden = true;
+                cancelCreateEventButton.hidden = true;
                 updateRecurrenceFields();
                 startInput.value = info.event.start ? toDateTimeLocal(info.event.start) : '';
                 endInput.value = info.event.end ? toDateTimeLocal(info.event.end) : '';

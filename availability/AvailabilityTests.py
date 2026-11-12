@@ -14,7 +14,7 @@ from availability.AvailabilityRepository import (
     get_employee_availability,
     update_availability,
 )
-from availability.AvailabilityService import availabilityDBtoEvents
+from availability.AvailabilityService import availability_db_to_events
 
 
 class AvailabilityTests(unittest.TestCase):
@@ -109,6 +109,7 @@ class AvailabilityTests(unittest.TestCase):
             [
                 (1, "employee", generate_password_hash("password"), 1, 101),
                 (2, "another", generate_password_hash("password"), 2, 202),
+                (3, "administrator", generate_password_hash("password"), 3, 202),
             ],
         )
         connection.executemany(
@@ -140,6 +141,13 @@ class AvailabilityTests(unittest.TestCase):
         response = self.client.post(
             "/login",
             data={"username": "another", "password": "password"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+    def login_administrator(self):
+        response = self.client.post(
+            "/login",
+            data={"username": "administrator", "password": "password"},
         )
         self.assertEqual(response.status_code, 302)
 
@@ -420,7 +428,7 @@ class AvailabilityTests(unittest.TestCase):
                     delete_availability(payload)
 
     def test_availability_db_rows_are_converted_to_calendar_events(self):
-        events = availabilityDBtoEvents(get_availability())
+        events = availability_db_to_events(get_availability())
 
         self.assertEqual(
             events,
@@ -441,7 +449,7 @@ class AvailabilityTests(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(availabilityDBtoEvents([]), [])
+        self.assertEqual(availability_db_to_events([]), [])
 
     def test_availability_page_renders_only_logged_in_users_events(self):
         self.login()
@@ -452,6 +460,7 @@ class AvailabilityTests(unittest.TestCase):
         self.assertIn(b"title: 'Morning Shift'", response.data)
         self.assertNotIn(b"Evening Shift", response.data)
         self.assertIn(b'id="modalRecurrence"', response.data)
+        self.assertIn(b'id="cancelCreateEventBtn" type="button" hidden>Cancel', response.data)
         self.assertIn(b'value="weekly">Weekly', response.data)
         self.assertIn(b'value="monthly">Monthly', response.data)
 
@@ -529,7 +538,8 @@ class AvailabilityTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"April Example (ID: 101)", response.data)
-        self.assertIn(b"Bob Example (ID: 202)", response.data)
+        self.assertNotIn(b"Bob Example (ID: 202)", response.data)
+        self.assertIn(b"My Availability", response.data)
 
     def test_manager_selection_saves_employee_and_redirects(self):
         self.login_manager()
@@ -543,6 +553,44 @@ class AvailabilityTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             self.assertEqual(session["availability_employee"], 101)
 
+    def test_manager_can_select_own_availability(self):
+        self.login_manager()
+
+        response = self.client.post(
+            "/avail_select", data={"employee_id": "202"}
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/availability")
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["availability_employee"], 202)
+
+        page = self.client.get("/availability")
+        self.assertEqual(page.status_code, 200)
+
+        created = self.client.post(
+            "/availability", json=self.valid_availability()
+        )
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(
+            self.read_rows(
+                "SELECT employee_id FROM EmployeeAvailability WHERE employee_id = 202"
+            )[-1][0],
+            202,
+        )
+
+    def test_manager_cannot_open_unknown_availability_with_stale_session(self):
+        self.login_manager()
+        with self.client.session_transaction() as session:
+            session["availability_employee"] = 999
+
+        response = self.client.get("/availability")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/avail_select")
+        with self.client.session_transaction() as session:
+            self.assertNotIn("availability_employee", session)
+
     def test_manager_cannot_select_an_unknown_employee(self):
         self.login_manager()
 
@@ -551,6 +599,23 @@ class AvailabilityTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_administrator_can_select_any_employee_level(self):
+        self.login_administrator()
+
+        selector_response = self.client.get("/avail_select")
+        self.assertEqual(selector_response.status_code, 200)
+        self.assertIn(b"April Example (ID: 101)", selector_response.data)
+        self.assertIn(b"Bob Example (ID: 202)", selector_response.data)
+
+        response = self.client.post(
+            "/avail_select", data={"employee_id": "202"}
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/availability")
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["availability_employee"], 202)
 
 
 if __name__ == "__main__":

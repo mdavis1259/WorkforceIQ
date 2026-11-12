@@ -5,25 +5,14 @@ from availability.AvailabilityRepository import (
     update_availability,
 )
 from availability.AvailabilityService import (
-    availabilityDBtoEvents,
-    build_availability_occurrences,
+    availability_db_to_events,
+    list_employees,
+    build_availability_occurrences
 )
-from database.connection import get_db_connection
-from employee_management.EmployeeRepository import EmployeeRepository
-from employee_management.EmployeeService import EmployeeService
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 
 availability_bp = Blueprint('availability', __name__, template_folder='templates')
-
-
-def _list_employees():
-    connection = get_db_connection()
-    try:
-        employee_service = EmployeeService(EmployeeRepository(connection))
-        return employee_service.list_employees()
-    finally:
-        connection.close()
 
 
 @availability_bp.route('/availability', methods=["GET", "POST", "DELETE"])
@@ -34,6 +23,17 @@ def availability():
         session["availability_employee"] = employee_id
     else:
         employee_id = session.get("availability_employee", current_user.employee_id)
+        if current_user.system_role_id == 2:
+            selectable_employee_ids = {
+                employee.employee_id
+                for employee in list_employees(associates_only=True)
+            }
+            if (
+                employee_id != current_user.employee_id
+                and employee_id not in selectable_employee_ids
+            ):
+                session.pop("availability_employee", None)
+                return redirect(url_for("availability.avail_select"))
 
     if request.method == "POST":
         data = request.get_json()
@@ -68,7 +68,7 @@ def availability():
             return jsonify({"status": "error", "message": "Availability not found"}), 404
         return jsonify({"status": "success", "message": "Availability deleted successfully"}), 200
 
-    avail_events = availabilityDBtoEvents(get_employee_availability(employee_id))
+    avail_events = availability_db_to_events(get_employee_availability(employee_id))
     return render_template('availability.html', availability=avail_events)
 
 
@@ -79,6 +79,10 @@ def avail_select():
         session["availability_employee"] = current_user.employee_id
         return redirect(url_for("availability.availability"))
 
+    selectable_employees = list_employees(
+        associates_only=current_user.system_role_id == 2
+    )
+
     if request.method == "POST":
         try:
             availability_employee = int(request.form["employee_id"])
@@ -86,9 +90,10 @@ def avail_select():
             return "Please select a valid employee.", 400
 
         allowed_employee_ids = {
-            current_user.employee_id,
-            *(employee.employee_id for employee in _list_employees()),
+            employee.employee_id for employee in selectable_employees
         }
+        if current_user.system_role_id in (2, 3):
+            allowed_employee_ids.add(current_user.employee_id)
         if availability_employee not in allowed_employee_ids:
             return "Please select a valid employee.", 400
 
@@ -97,5 +102,5 @@ def avail_select():
 
     return render_template(
         'avail_select.html',
-        employees=_list_employees(),
+        employees=selectable_employees,
     )

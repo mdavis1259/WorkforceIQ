@@ -1,18 +1,35 @@
 from calendar import monthrange
 from datetime import date, datetime, timedelta
 
+from database.connection import get_db_connection
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
 
-def availabilityDBtoEvents(availability_tuples):
+def list_employees(associates_only=False):
+    connection = get_db_connection()
+    try:
+        employee_service = EmployeeService(EmployeeRepository(connection))
+        employees = employee_service.list_employees()
+
+        if associates_only:
+            employees = [
+                employee for employee in employees
+                if employee_service.get_system_role(employee.role_id) == 1
+            ]
+        return employees
+    finally:
+        connection.close()
+
+def availability_db_to_events(availability_tuples):
     formatted_data = []
     for item in availability_tuples:
-        formatted_dict = {
+        formatted_data.append({
             'id': item['employee_availability_id'],
             'title': item['shift_name'],
             'start': item['start_time'],
             'end': item['end_time'],
             'color': 'red' if item['availability'] == 0 else 'green',
-        }
-        formatted_data.append(formatted_dict)
+        })
     return formatted_data
 
 
