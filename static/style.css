@@ -166,6 +166,59 @@ dialog::backdrop {
     background: rgba(0, 0, 0, 0.45);
 }
 
+.availability-field {
+    margin-bottom: 10px;
+}
+
+.availability-field label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.availability-field input:not([type="checkbox"]) {
+    display: block;
+    width: 100%;
+}
+
+.availability-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.availability-checkbox label {
+    margin-bottom: 0;
+}
+
+.availability-modal-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.availability-modal-actions button {
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 6px;
+    font: inherit;
+    cursor: pointer;
+}
+
+#closeModalBtn {
+    background: var(--primary);
+    color: white;
+}
+
+#cancelCreateEventBtn {
+    background: #e0e0e0;
+    color: var(--text);
+}
+
+#deleteEventBtn {
+    background: #d32f2f;
+    color: white;
+}
+
 /* ==========================
    BUTTONS
    ========================== */
@@ -281,7 +334,6 @@ dialog::backdrop {
    ========================== */
 
 table {
-    margin-top: 20px;
     width: 100%;
     border-collapse: collapse;
     background: white;
@@ -346,4 +398,76 @@ tr:hover {
     padding: 20px;
     color: #666;
     margin-top: 40px;
+}
+
+/* ==========================
+   AVAILABILITY CALENDAR
+   ========================== */
+.calendar-wrapper {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+}
+
+.calendar-wrapper > #calendar {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.calendar-wrapper .fc {
+    width: 100%;
+}
+
+.calendar-wrapper .fc-toolbar.fc-header-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.add-event-button {
+    position: fixed;
+    top: 50%;
+    right: 24px;
+    z-index: 10;
+    width: auto;
+    padding: 18px 26px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--primary);
+    color: white;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transform: translateY(-50%);
+}
+
+.add-event-button:hover {
+    background: var(--primary-dark);
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+
+    .calendar-wrapper {
+        padding: 15px;
+    }
+
+    .calendar-wrapper .fc-toolbar-title {
+        font-size: 1.1em;
+    }
+
+    .calendar-wrapper .fc-button {
+        padding: 0.4em;
+        font-size: 0.85em;
+    }
+
+    .add-event-button {
+        right: 12px;
+        padding: 16px 20px;
+    }
 }

@@ -120,6 +120,13 @@ class EmployeeRepository:
         )
         return _rows(cursor)
 
+    def get_system_role_id(self, role_id):
+        cursor = self.conn.execute(
+            "SELECT system_role_id FROM Roles WHERE role_id = ?", (role_id,)
+        )
+        row = cursor.fetchone()
+        return row["system_role_id"] if row is not None else None
+
     # ----- qualifications -----------------------------------------
     def list_qualifications(self):
         cursor = self.conn.execute(

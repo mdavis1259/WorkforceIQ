@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Who's Availability Would You Like to View?</h1>
+<div class="availability-selection">
+    <form action="{{ url_for('availability.avail_select') }}" method="POST">
+        <button type="submit" name="employee_id" value="{{ current_user.employee_id }}" class="btn">
+            My Availability
+        </button>
+    </form>
+    
+    <form action="{{ url_for('availability.avail_select') }}" method="POST">
+        <label for="employee_id">View an employee:</label>
+        <select id="employee_id" name="employee_id" required>
+            {% for employee in employees %}
+            <option value="{{ employee.employee_id }}">{{ employee.first_name }} {{ employee.last_name }} (ID: {{ employee.employee_id }})</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn">View Selected Employee</button>
+    </form>
+</div>
+{% endblock %}

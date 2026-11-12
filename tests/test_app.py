@@ -57,7 +57,23 @@ class WorkforceIQTestCase(unittest.TestCase):
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
                 hourly_rate REAL NOT NULL,
+                max_hours_per_week INTEGER NOT NULL DEFAULT 40,
+                preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
+                active INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (role_id) REFERENCES Roles(role_id)
+            );
+
+            CREATE TABLE Qualifications(
+                qualification_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                qualification_name TEXT NOT NULL UNIQUE
+            );
+
+            CREATE TABLE EmployeeQualifications(
+                employee_id INTEGER NOT NULL,
+                qualification_id INTEGER NOT NULL,
+                PRIMARY KEY (employee_id, qualification_id),
+                FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
+                FOREIGN KEY (qualification_id) REFERENCES Qualifications(qualification_id)
             );
 
             CREATE TABLE Users(
@@ -85,6 +101,23 @@ class WorkforceIQTestCase(unittest.TestCase):
                 projected_sales_high REAL NOT NULL,
                 required_labor_hours REAL,
                 labor_budget REAL NOT NULL
+            );
+
+            CREATE TABLE Shifts(
+                shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_name TEXT NOT NULL,
+                start_time TIME NOT NULL,
+                end_time TIME NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE TABLE EmployeeAvailability(
+                employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                shift_id INTEGER NOT NULL,
+                availability INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
+                FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id)
             );
         """)
 
@@ -132,6 +165,14 @@ class WorkforceIQTestCase(unittest.TestCase):
             "INSERT INTO Users(username, password, system_role_id, employee_id) VALUES (?, ?, ?, ?)",
             ("test", generate_password_hash("password123"), 1, 2),
         )
+        connection.execute(
+            "INSERT INTO Shifts(shift_name, start_time, end_time) VALUES (?, ?, ?)",
+            ("Test Shift", "2026-11-10T08:00:00", "2026-11-10T12:00:00"),
+        )
+        connection.execute(
+            "INSERT INTO EmployeeAvailability(employee_id, shift_id, availability) VALUES (?, ?, ?)",
+            (2, 1, 1),
+        )
 
         connection.commit()
         connection.close()
@@ -142,6 +183,15 @@ class WorkforceIQTestCase(unittest.TestCase):
             data={"username": "test", "password": "password123"},
             follow_redirects=False,
         )
+
+    def set_test_user_role(self, system_role_id):
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            "UPDATE Users SET system_role_id = ? WHERE username = ?",
+            (system_role_id, "test"),
+        )
+        connection.commit()
+        connection.close()
 
     # Tests (run after setUp and before tearDown)
 
@@ -155,7 +205,8 @@ class WorkforceIQTestCase(unittest.TestCase):
         expected_result = expected_cursor.fetchone()
         expected_connection.close()
 
-        actual_connection = app_module.get_db_connection()
+        with app.app_context():
+            actual_connection = app_module.get_db_connection()
         actual_cursor = actual_connection.cursor()
         actual_cursor.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='Users'"
@@ -189,7 +240,8 @@ class WorkforceIQTestCase(unittest.TestCase):
         from forecasting.ForecastRepository import ForecastRepository
         from forecasting.ForecastService import ForecastService
 
-        connection = app_module.get_db_connection()
+        with app.app_context():
+            connection = app_module.get_db_connection()
 
         try:
             repository = ForecastRepository(connection)
