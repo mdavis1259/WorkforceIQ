@@ -97,6 +97,18 @@ class SchedulingRepository:
 
         return self.get_shift_by_id(shift_id)
 
+    def delete_shift(self, shift_id):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            DELETE
+            FROM Shifts
+            WHERE shift_id = ?
+        """, (shift_id,))
+
+        self.conn.commit()
+
     # ===============================================
     # STAFFING REQUIREMENTS
     # ===============================================
@@ -231,4 +243,4 @@ class SchedulingRepository:
         self.conn.commit()
 
         return self.get_workday_by_id(workday_id)
-        
+
