@@ -1,6 +1,6 @@
-from datetime import datetime
-
 from database.connection import get_db_connection
+from availability.AvailabilityService import build_availability_occurrences
+
 
 # Fetches all availability data for all employees, including shift details
 def get_availability():
@@ -9,9 +9,10 @@ def get_availability():
 
     cursor.execute(
                    """
-                   SELECT ea.*, s.shift_name, s.start_time, s.end_time,
+                   SELECT ea.*, s.shift_name, s.start_time, s.end_time
                    FROM EmployeeAvailability AS ea
                    JOIN Shifts AS s ON s.shift_id = ea.shift_id
+                   ORDER BY ea.employee_availability_id
                    """)
     returned_data = cursor.fetchall()
     conn.close()
@@ -37,79 +38,66 @@ def get_employee_availability(employee_id):
 
     return returned_data
 
-# Creates a new availability entry and corresponding shift for an employee, including shift details
-def create_availability(employee_id, data):
-    if not isinstance(data, dict):
-        raise ValueError("Request body must be a JSON object")
-
-    # Get the required fields from the data dictionary
-    shift_name = data.get('title')
-    start = data.get('start')
-    end = data.get('end')
-    availability = data.get('availability')
-
-    # Validate the required fields
+# Creates one or more availability entries and corresponding shifts for an employee.
+def create_availability_series(employee_id, occurrences):
     if employee_id is None:
         raise ValueError("EmployeeID is required")
-    if not isinstance(shift_name, str) or not shift_name.strip():
-        raise ValueError("Title must be a non-empty string")
-    if not isinstance(start, str) or not isinstance(end, str):
-        raise ValueError("Start and end times are required")
-    if availability not in (0, 1, False, True):
-        raise ValueError("Availability must be False or True")
+    if not isinstance(occurrences, list) or not occurrences:
+        raise ValueError("At least one availability occurrence is required")
 
-    # Validate the start and end times
-    try:
-        start_datetime = datetime.fromisoformat(start)
-        end_datetime = datetime.fromisoformat(end)
-    except ValueError as error:
-        raise ValueError("Start and end times must be valid ISO date-times") from error
-    if start_datetime.tzinfo != end_datetime.tzinfo:
-        raise ValueError("Start and end times must use the same time zone")
-    if end_datetime <= start_datetime:
-        raise ValueError("End time must be after start time")
-
-    # Add the availability entry to the database
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
 
-        # Check if the employee exists
         cursor.execute("SELECT employee_id FROM Employees WHERE employee_id = ?", (employee_id,))
         employee_row = cursor.fetchone()
         if employee_row is None:
             return None
 
-        # Make new shift entry and get the shift_id if the Shift doesn't exist
-        cursor.execute(
-            "SELECT shift_id FROM Shifts WHERE shift_name = ? AND start_time = ? AND end_time = ?",
-            (shift_name.strip(), start, end)
-        )
-        shift_row = cursor.fetchone()
-        if shift_row:
-            shift_id = shift_row['shift_id']
-        else:
+        created_events = []
+        for occurrence in occurrences:
+            shift_name = occurrence["title"]
+            start = occurrence["start"]
+            end = occurrence["end"]
             cursor.execute(
-                "INSERT INTO Shifts (shift_name, start_time, end_time) VALUES (?, ?, ?)",
-                (shift_name.strip(), start, end)
+                "SELECT shift_id FROM Shifts WHERE shift_name = ? AND start_time = ? AND end_time = ?",
+                (shift_name, start, end)
             )
-            shift_id = cursor.lastrowid
+            shift_row = cursor.fetchone()
+            if shift_row:
+                shift_id = shift_row['shift_id']
+            else:
+                cursor.execute(
+                    "INSERT INTO Shifts (shift_name, start_time, end_time) VALUES (?, ?, ?)",
+                    (shift_name, start, end)
+                )
+                shift_id = cursor.lastrowid
 
-        # Make new availability entry
-        cursor.execute(
-            """
-            INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
-            VALUES (?, ?, ?)
-            """,
-            (employee_row['employee_id'], shift_id, int(availability))
-        )
+            cursor.execute(
+                """
+                INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
+                VALUES (?, ?, ?)
+                """,
+                (employee_row['employee_id'], shift_id, occurrence["availability"])
+            )
+            created_events.append({
+                "id": cursor.lastrowid,
+                "start": start,
+                "end": end,
+            })
 
-        # Get the employee_availability_id to set for event id in calendar
-        availability_id = cursor.lastrowid
         conn.commit()
-        return availability_id
+        return created_events
     finally:
         conn.close()
+
+
+def create_availability(employee_id, data):
+    occurrences = build_availability_occurrences(data)
+    created_events = create_availability_series(employee_id, occurrences)
+    if not created_events:
+        return None
+    return created_events[0]["id"]
 
 
 def update_availability(data):

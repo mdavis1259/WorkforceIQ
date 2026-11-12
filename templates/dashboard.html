@@ -18,10 +18,9 @@
         </div>
 
         <div class="module-card">
-            <h2>Submit Availability</h2>
-            <p>Submit your availability for the upcoming period.</p>
-        <p> UNDER CONSTRUCTION</p>
-        <a href="/availability">
+            <h2>{% if level == 1 %}Submit Availability{% else %}Availability Management{%endif%}</h2>
+            <p>{% if level == 1 %}Submit your availability for the upcoming period.{%else%} Submit availability and manage employee time-off requests{%endif%}</p>
+        <a href="{{ url_for('availability.availability') if level == 1 else url_for('availability.avail_select') }}">
                 <button class="btn">Open Module</button>
         </a>
         </div>

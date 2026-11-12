@@ -8,11 +8,11 @@ from werkzeug.security import generate_password_hash
 
 from app import app
 from availability.AvailabilityRepository import (
-    createAvailability,
-    deleteAvailability,
+    create_availability,
+    delete_availability,
     get_availability,
-    getUserAvailability,
-    updateAvailability,
+    get_employee_availability,
+    update_availability,
 )
 from availability.AvailabilityService import availabilityDBtoEvents
 
@@ -45,7 +45,32 @@ class AvailabilityTests(unittest.TestCase):
                 username TEXT NOT NULL,
                 password TEXT NOT NULL,
                 system_role_id INTEGER NOT NULL,
-                employee_id INTEGER NOT NULL
+                employee_id INTEGER NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE Roles(
+                role_id INTEGER PRIMARY KEY,
+                role_name TEXT NOT NULL,
+                system_role_id INTEGER NOT NULL
+            );
+            CREATE TABLE Employees(
+                employee_id INTEGER PRIMARY KEY,
+                role_id INTEGER NOT NULL,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                hourly_rate REAL NOT NULL,
+                max_hours_per_week INTEGER NOT NULL DEFAULT 40,
+                preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
+                active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE Qualifications(
+                qualification_id INTEGER PRIMARY KEY,
+                qualification_name TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE EmployeeQualifications(
+                employee_id INTEGER NOT NULL,
+                qualification_id INTEGER NOT NULL,
+                PRIMARY KEY (employee_id, qualification_id)
             );
             CREATE TABLE Shifts(
                 shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,13 +88,27 @@ class AvailabilityTests(unittest.TestCase):
             """
         )
         connection.executemany(
+            "INSERT INTO Roles VALUES (?, ?, ?)",
+            [(1, "Associate", 1), (2, "Manager", 2)],
+        )
+        connection.executemany(
+            """
+            INSERT INTO Employees(employee_id, role_id, first_name, last_name, hourly_rate)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (101, 1, "April", "Example", 20.0),
+                (202, 2, "Bob", "Example", 25.0),
+            ],
+        )
+        connection.executemany(
             """
             INSERT INTO Users(userid, username, password, system_role_id, employee_id)
             VALUES (?, ?, ?, ?, ?)
             """,
             [
                 (1, "employee", generate_password_hash("password"), 1, 101),
-                (2, "another", generate_password_hash("password"), 1, 202),
+                (2, "another", generate_password_hash("password"), 2, 202),
             ],
         )
         connection.executemany(
@@ -94,6 +133,13 @@ class AvailabilityTests(unittest.TestCase):
         response = self.client.post(
             "/login",
             data={"username": "employee", "password": "password"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+    def login_manager(self):
+        response = self.client.post(
+            "/login",
+            data={"username": "another", "password": "password"},
         )
         self.assertEqual(response.status_code, 302)
 
@@ -124,25 +170,24 @@ class AvailabilityTests(unittest.TestCase):
                     row["shift_name"],
                     row["start_time"],
                     row["end_time"],
-                    row["active"],
                 )
                 for row in rows
             ],
             [
-                (101, "Morning Shift", "2026-11-10T08:00:00", "2026-11-10T12:00:00", 1),
-                (202, "Evening Shift", "2026-11-10T16:00:00", "2026-11-10T20:00:00", 1),
+                (101, "Morning Shift", "2026-11-10T08:00:00", "2026-11-10T12:00:00"),
+                (202, "Evening Shift", "2026-11-10T16:00:00", "2026-11-10T20:00:00"),
             ],
         )
 
     def test_get_user_availability_only_returns_the_users_employee_records(self):
-        rows = getUserAvailability(1)
+        rows = get_employee_availability(101)
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["employee_id"], 101)
         self.assertEqual(rows[0]["shift_name"], "Morning Shift")
 
     def test_create_availability_persists_shift_and_employee_record(self):
-        availability_id = createAvailability(1, self.valid_availability(title="  New Shift  "))
+        availability_id = create_availability(101, self.valid_availability(title="  New Shift  "))
 
         self.assertEqual(availability_id, 3)
         self.assertEqual(
@@ -159,8 +204,8 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_create_availability_accepts_false_and_returns_none_for_unknown_user(self):
-        availability_id = createAvailability(
-            1, self.valid_availability(availability=False)
+        availability_id = create_availability(
+            101, self.valid_availability(availability=False)
         )
 
         self.assertEqual(
@@ -170,7 +215,7 @@ class AvailabilityTests(unittest.TestCase):
             ),
             [(0,)],
         )
-        self.assertIsNone(createAvailability(999, self.valid_availability()))
+        self.assertIsNone(create_availability(999, self.valid_availability()))
 
     def test_create_availability_rejects_invalid_payloads(self):
         invalid_payloads = [
@@ -188,7 +233,7 @@ class AvailabilityTests(unittest.TestCase):
             ),
             (
                 self.valid_availability(availability=2),
-                "Availability must be 0 or 1",
+                "Availability must be False or True",
             ),
             (
                 self.valid_availability(start="not-a-date"),
@@ -220,12 +265,92 @@ class AvailabilityTests(unittest.TestCase):
         for payload, message in invalid_payloads:
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, message):
-                    createAvailability(1, payload)
+                    create_availability(101, payload)
 
         self.assertEqual(self.read_rows("SELECT COUNT(*) FROM Shifts"), [(2,)])
 
+    def test_create_weekly_availability_repeats_until_end_date(self):
+        availability_id = create_availability(
+            101,
+            self.valid_availability(
+                recurrence="weekly",
+                recurrence_until="2026-11-25",
+            ),
+        )
+
+        self.assertEqual(availability_id, 3)
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT s.start_time, s.end_time
+                FROM EmployeeAvailability ea
+                JOIN Shifts s ON s.shift_id = ea.shift_id
+                WHERE ea.employee_id = 101 AND s.shift_name = ?
+                ORDER BY s.start_time
+                """,
+                ("New Shift",),
+            ),
+            [
+                ("2026-11-11T09:00:00", "2026-11-11T10:00:00"),
+                ("2026-11-18T09:00:00", "2026-11-18T10:00:00"),
+                ("2026-11-25T09:00:00", "2026-11-25T10:00:00"),
+            ],
+        )
+
+    def test_create_monthly_availability_preserves_end_of_month_dates(self):
+        availability_id = create_availability(
+            101,
+            self.valid_availability(
+                start="2026-01-31T09:00:00",
+                end="2026-01-31T10:00:00",
+                recurrence="monthly",
+                recurrence_until="2026-04-30",
+            ),
+        )
+
+        self.assertEqual(availability_id, 3)
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT s.start_time
+                FROM EmployeeAvailability ea
+                JOIN Shifts s ON s.shift_id = ea.shift_id
+                WHERE ea.employee_id = 101 AND s.shift_name = ?
+                ORDER BY s.start_time
+                """,
+                ("New Shift",),
+            ),
+            [
+                ("2026-01-31T09:00:00",),
+                ("2026-02-28T09:00:00",),
+                ("2026-03-31T09:00:00",),
+                ("2026-04-30T09:00:00",),
+            ],
+        )
+
+    def test_create_recurring_availability_requires_end_date(self):
+        with self.assertRaisesRegex(
+            ValueError, "A recurrence end date is required"
+        ):
+            create_availability(
+                101,
+                self.valid_availability(recurrence="weekly"),
+            )
+
+    def test_create_availability_rejects_recurrence_end_before_start(self):
+        with self.assertRaisesRegex(
+            ValueError, "Recurrence end date must be on or after the event date"
+        ):
+            create_availability(
+                101,
+                self.valid_availability(
+                    recurrence="monthly",
+                    recurrence_until="2026-11-10",
+                ),
+            )
+
     def test_update_availability_updates_shift_fields_and_availability(self):
-        updated = updateAvailability(
+        updated = update_availability(
             {
                 "id": 1,
                 "title": "  Updated Shift ",
@@ -249,7 +374,7 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_update_availability_supports_availability_only_updates(self):
-        self.assertTrue(updateAvailability({"id": 1, "availability": 0}))
+        self.assertTrue(update_availability({"id": 1, "availability": 0}))
         self.assertEqual(
             self.read_rows(
                 "SELECT availability FROM EmployeeAvailability WHERE employee_availability_id = 1"
@@ -258,7 +383,7 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_update_availability_returns_false_for_unknown_record(self):
-        self.assertFalse(updateAvailability({"id": 999, "title": "Updated"}))
+        self.assertFalse(update_availability({"id": 999, "title": "Updated"}))
 
     def test_update_availability_rejects_invalid_payloads(self):
         invalid_payloads = [
@@ -266,16 +391,16 @@ class AvailabilityTests(unittest.TestCase):
             ({}, "AvailabilityID is required"),
             ({"id": 1}, "No availability changes provided"),
             ({"id": 1, "title": " "}, "Title must be a non-empty string"),
-            ({"id": 1, "availability": 3}, "Availability must be 0 or 1"),
+            ({"id": 1, "availability": 3}, "Availability must be False or True"),
         ]
 
         for payload, message in invalid_payloads:
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, message):
-                    updateAvailability(payload)
+                    update_availability(payload)
 
     def test_delete_availability_removes_record_and_its_shift(self):
-        self.assertTrue(deleteAvailability({"id": 1}))
+        self.assertTrue(delete_availability({"id": 1}))
         self.assertEqual(
             self.read_rows("SELECT * FROM EmployeeAvailability WHERE employee_availability_id = 1"),
             [],
@@ -283,7 +408,7 @@ class AvailabilityTests(unittest.TestCase):
         self.assertEqual(self.read_rows("SELECT * FROM Shifts WHERE shift_id = 1"), [])
 
     def test_delete_availability_returns_false_for_unknown_record(self):
-        self.assertFalse(deleteAvailability({"id": 999}))
+        self.assertFalse(delete_availability({"id": 999}))
 
     def test_delete_availability_rejects_invalid_payloads(self):
         for payload, message in (
@@ -292,7 +417,7 @@ class AvailabilityTests(unittest.TestCase):
         ):
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, message):
-                    deleteAvailability(payload)
+                    delete_availability(payload)
 
     def test_availability_db_rows_are_converted_to_calendar_events(self):
         events = availabilityDBtoEvents(get_availability())
@@ -326,6 +451,9 @@ class AvailabilityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"title: 'Morning Shift'", response.data)
         self.assertNotIn(b"Evening Shift", response.data)
+        self.assertIn(b'id="modalRecurrence"', response.data)
+        self.assertIn(b'value="weekly">Weekly', response.data)
+        self.assertIn(b'value="monthly">Monthly', response.data)
 
     def test_availability_route_creates_updates_and_deletes_events(self):
         self.login()
@@ -372,14 +500,57 @@ class AvailabilityTests(unittest.TestCase):
         self.login()
 
         with patch(
-            "availability.AvailabilityRoutes.createAvailability", return_value=None
+            "availability.AvailabilityRoutes.create_availability_series",
+            return_value=None,
         ):
             response = self.client.post(
                 "/availability", json=self.valid_availability()
             )
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.get_json()["message"], "User not found")
+        self.assertEqual(response.get_json()["message"], "Employee not found")
+
+    def test_associate_availability_selector_redirects_to_own_availability(self):
+        self.login()
+        with self.client.session_transaction() as session:
+            session["availability_employee"] = 202
+
+        response = self.client.get("/avail_select")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/availability")
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["availability_employee"], 101)
+
+    def test_manager_availability_selector_lists_employees(self):
+        self.login_manager()
+
+        response = self.client.get("/avail_select")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"April Example (ID: 101)", response.data)
+        self.assertIn(b"Bob Example (ID: 202)", response.data)
+
+    def test_manager_selection_saves_employee_and_redirects(self):
+        self.login_manager()
+
+        response = self.client.post(
+            "/avail_select", data={"employee_id": "101"}
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, "/availability")
+        with self.client.session_transaction() as session:
+            self.assertEqual(session["availability_employee"], 101)
+
+    def test_manager_cannot_select_an_unknown_employee(self):
+        self.login_manager()
+
+        response = self.client.post(
+            "/avail_select", data={"employee_id": "999"}
+        )
+
+        self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":

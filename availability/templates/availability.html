@@ -37,6 +37,18 @@
                 <label for="modalEnd">End:</label>
                 <input id="modalEnd" type="datetime-local" step="900" required>
             </div>
+            <div class="availability-field" id="recurrenceField">
+                <label for="modalRecurrence">Repeat:</label>
+                <select id="modalRecurrence">
+                    <option value="none">Does not repeat</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+            <div class="availability-field" id="recurrenceUntilField" hidden>
+                <label for="modalRecurrenceUntil">Repeat until:</label>
+                <input id="modalRecurrenceUntil" type="date">
+            </div>
             <div class="availability-field availability-checkbox">
                 <label for="modalAvailable">Available?</label>
                 <input id="modalAvailable" type="checkbox">
@@ -55,6 +67,10 @@
         let titleInput = document.getElementById('modalTitle');
         let startInput = document.getElementById('modalStart');
         let endInput = document.getElementById('modalEnd');
+        let recurrenceInput = document.getElementById('modalRecurrence');
+        let recurrenceUntilInput = document.getElementById('modalRecurrenceUntil');
+        let recurrenceField = document.getElementById('recurrenceField');
+        let recurrenceUntilField = document.getElementById('recurrenceUntilField');
         let availableInput = document.getElementById('modalAvailable');
         let closeModalButton = document.getElementById('closeModalBtn');
         let addEventButton = document.getElementById('addEventBtn');
@@ -101,8 +117,17 @@
                 title: titleInput.value,
                 start: startInput.value,
                 end: endInput.value,
+                recurrence: recurrenceInput.value,
+                recurrenceUntil: recurrenceUntilInput.value,
                 available: availableInput.checked
             };
+        }
+
+        function updateRecurrenceFields() {
+            const repeats = recurrenceInput.value !== 'none';
+            recurrenceUntilField.hidden = !repeats;
+            recurrenceUntilInput.required = repeats;
+            recurrenceUntilInput.min = startInput.value.slice(0, 10);
         }
 
         // Changes from Save to Close based on if changes have been made
@@ -115,10 +140,12 @@
 
         // Add event listeners to update the modal button text when any input changes
         // Calls above method
-        [titleInput, startInput, endInput, availableInput].forEach(input => {
+        [titleInput, startInput, endInput, recurrenceInput, recurrenceUntilInput, availableInput].forEach(input => {
             input.addEventListener('input', updateModalButton);
             input.addEventListener('change', updateModalButton);
         });
+        recurrenceInput.addEventListener('change', updateRecurrenceFields);
+        startInput.addEventListener('change', updateRecurrenceFields);
 
         // Passed date is formatted to datetime-local format
         function toDateTimeLocal(date) {
@@ -149,6 +176,8 @@
             originalValues = null;
             modalHeading.textContent = 'Add availability';
             titleInput.value = '';
+            recurrenceInput.value = 'none';
+            recurrenceUntilInput.value = '';
 
             //Get rounded time for min value allowed
             startInput.min = getCurrentTime();
@@ -157,6 +186,8 @@
             //Gets formatted version of the start and end time
             startInput.value = toDateTimeLocal(start);
             endInput.value = toDateTimeLocal(end);
+            recurrenceField.hidden = false;
+            updateRecurrenceFields();
 
             //Set available to true, no delete option
             availableInput.checked = true;
@@ -190,7 +221,10 @@
 
                 //Ensure all inputs are legitimate
                 if (!titleInput.value.trim() || !startInput.value || !endInput.value ||
-                        Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+                        Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start ||
+                        (recurrenceInput.value !== 'none' &&
+                            (!recurrenceUntilInput.value ||
+                                recurrenceUntilInput.value < startInput.value.slice(0, 10)))) {
                     alert('Enter a title and a valid start and end time.');
                     creatingEvent = true;
                     modal.showModal();
@@ -202,7 +236,9 @@
                     title: titleInput.value.trim(),
                     start: toDateTimeLocal(start),
                     end: toDateTimeLocal(end),
-                    availability: availableInput.checked ? 1 : 0
+                    availability: availableInput.checked ? 1 : 0,
+                    recurrence: recurrenceInput.value,
+                    recurrence_until: recurrenceUntilInput.value
                 };
                 fetch('/availability', {
                     method: 'POST',
@@ -217,14 +253,15 @@
                     if (!response.ok || data.status !== 'success') {
                         throw new Error(data.message || 'Failed to create event.');
                     }
-                    //Else, make event on calendar
-                    calendar.addEvent({
-                        id: data.id,
-                        title: eventData.title,
-                        start: eventData.start,
-                        end: eventData.end,
-                        color: eventData.availability ? 'green' : 'red',
-                        extendedProps: { availability: eventData.availability }
+                    data.events.forEach(function(event) {
+                        calendar.addEvent({
+                            id: event.id,
+                            title: eventData.title,
+                            start: event.start,
+                            end: event.end,
+                            color: eventData.availability ? 'green' : 'red',
+                            extendedProps: { availability: eventData.availability }
+                        });
                     });
                 })
                 .catch(error => {
@@ -335,6 +372,10 @@
                 selectedEvent = info.event;
                 modalHeading.textContent = 'Edit availability';
                 titleInput.value = info.event.title;
+                recurrenceInput.value = 'none';
+                recurrenceUntilInput.value = '';
+                recurrenceField.hidden = true;
+                updateRecurrenceFields();
                 startInput.value = info.event.start ? toDateTimeLocal(info.event.start) : '';
                 endInput.value = info.event.end ? toDateTimeLocal(info.event.end) : '';
                 availableInput.checked = info.event.backgroundColor !== 'red';
