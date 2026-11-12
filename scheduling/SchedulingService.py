@@ -172,3 +172,24 @@ class SchedulingService:
             requirement_id,
             required_count
         )
+
+    # ==================================================
+    # WORKDAYS
+    # ==================================================
+
+    def list_workdays(self):
+
+        return self.repository.get_workdays()
+
+    def update_workday(self, workday_id, active):
+        
+        if workday_id is None:
+            raise ValidationError("Workday ID is required.")
+
+        existing = self.repository.get_workday_by_id(workday_id)
+
+        if existing is None:
+            raise ValidationError("Workday not found.")
+
+        return self.repository.update_workday(workday_id, active)
+        

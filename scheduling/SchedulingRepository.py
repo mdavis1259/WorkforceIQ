@@ -190,4 +190,45 @@ class SchedulingRepository:
         self.conn.commit()
 
         return self.get_staffing_requirement_by_id(requirement_id)
+
+    # =========================================================
+    # WORKDAYS
+    # =========================================================
+    def get_workdays(self):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Workdays
+            ORDER BY Workday_id
+        """)
+
+        return cursor.fetchall()
+
+    def get_workday_by_id(self, workday_id):
     
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Workdays
+            WHERE workday_id = ?
+        """, (workday_id,))
+
+        return cursor.fetchone()
+
+    def update_workday(self, workday_id, active):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            UPDATE Workdays
+            SET active = ?
+            WHERE workday_id = ?
+        """, (int(active), workday_id))
+
+        self.conn.commit()
+
+        return self.get_workday_by_id(workday_id)
+        

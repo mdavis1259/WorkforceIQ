@@ -107,7 +107,8 @@ REFERENCES Employees(employee_id)
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS Workdays(
     workday_id INTEGER PRIMARY KEY,
-    day_name TEXT NOT NULL UNIQUE
+    day_name TEXT NOT NULL UNIQUE,
+    active INTEGER NOT NULL DEFAULT 1
 )
 """)
 
