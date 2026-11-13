@@ -165,7 +165,7 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS Schedules(
     schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
     week_start TEXT NOT NULL,
-    status TEXT NOT NULL
+    status TEXT NOT NULL DEFAULT 'Draft'
 )
 """)
 
@@ -192,6 +192,13 @@ CREATE TABLE IF NOT EXISTS ShiftAssignments(
 
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id)
+
+    UNIQUE(
+        schedule_id,
+        employee_id,
+        shift_id,
+        schedule_date
+    )
 )
 """)
 

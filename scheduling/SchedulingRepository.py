@@ -279,3 +279,98 @@ class SchedulingRepository:
 
         return self.get_workday_by_id(workday_id)
 
+    # =====================================================
+    # SCHEDULES
+    # =====================================================
+    def create_schedule(self, week_start, status="Draft"):
+        
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO Schedules(
+                week_start,
+                status
+            )
+            VALUES (?, ?)
+        """, (
+            week_start,
+            status
+        ))
+
+        self.conn.commit()
+
+        return self.get_schedule_by_id(cursor.lastrowid)
+
+    def get_schedule_by_id(self, schedule_id):
+        
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Schedules
+            WHERE schedule_id = ?
+        """, (schedule_id,))
+
+        return cursor.fetchone()
+
+    def get_schedule_by_week(self, week_start):
+        
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Schedules
+            WHERE week_start = ?
+        """, (week_start,))
+
+        return cursor.fetchone()
+
+    # ===============================================
+    # ASSIGNMENTS
+    # ===============================================
+    
+    def create_assignment(
+        self,
+        schedule_id,
+        employee_id,
+        role_id,
+        shift_id,
+        schedule_date,
+        hours
+    ):
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO ShiftAssignments(
+                schedule_id,
+                employee_id,
+                role_id,
+                shift_id,
+                schedule_date,
+                hours
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            schedule_id,
+            employee_id,
+            role_id,
+            shift_id,
+            schedule_date,
+            hours
+        ))
+
+        self.conn.commit()
+
+    def get_assignments(self, schedule_id):
+        
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM ShiftAssignments
+            WHERE schedule_id = ?
+            ORDER BY schedule_date
+        """, (schedule_id,))
+
+        return cursor.fetchall()
+    

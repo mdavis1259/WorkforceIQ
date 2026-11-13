@@ -106,6 +106,24 @@ class SchedulingTests(unittest.TestCase):
                 role_id INTEGER NOT NULL,
                 required_count INTEGER NOT NULL
             );
+
+            CREATE TABLE Schedules(
+                schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                week_start TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Draft'
+            );
+
+            CREATE TABLE ShiftAssignments(
+                assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                schedule_id INTEGER NOT NULL,
+                employee_id INTEGER NOT NULL,
+                role_id INTEGER NOT NULL,
+                shift_id INTEGER NOT NULL,
+
+                schedule_date TEXT NOT NULL,
+                hours REAL NOT NULL
+            );
             """
         )
 
@@ -500,6 +518,44 @@ class SchedulingTests(unittest.TestCase):
             [(0,)]
         )
 
+    def test_create_schedule_persists_record(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            service.create_schedule("2026-11-09")
+
+        finally:
+            conn.close()
+
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT week_start
+                FROM Schedules
+                """
+            ),
+            [("2026-11-09",)]
+        )
+
+    def test_get_schedule_returns_schedule(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            service.create_schedule("2026-11-09")
+
+            schedule = service.get_schedule("2026-11-09")
+        
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(schedule)
+
+        self.assertEqual(schedule["week_start"], "2026-11-09")
+        
 
 if __name__ == "__main__":
     unittest.main()
