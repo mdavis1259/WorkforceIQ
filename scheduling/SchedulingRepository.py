@@ -119,9 +119,12 @@ class SchedulingRepository:
 
         cursor.execute("""
             SELECT
-                sr.requirement_id,
-                wd.day_name,
+                sr.shift_id,
+                sr.role_id,
                 s.shift_name,
+                GROUP_CONCAT(
+                    DISTINCT wd.day_name
+                ) AS workdays,
                 r.role_name,
                 sr.required_count
             FROM StaffingRequirements sr
@@ -131,9 +134,13 @@ class SchedulingRepository:
                 ON sr.shift_id = s.shift_id
             JOIN Roles r
                 ON sr.role_id = r.role_id
+            GROUP BY
+                sr.shift_id,
+                sr.role_id,
+                sr.required_count
             ORDER BY
-                wd.workday_id,
-                s.start_time
+                s.start_time,
+                r.role_name
         """)
 
         return cursor.fetchall()
@@ -151,6 +158,20 @@ class SchedulingRepository:
         """, ( requirement_id,))
 
         return cursor.fetchone()
+
+    def staffing_requirement_exists(self, workday_id, shift_id, role_id):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM StaffingRequirements
+            WHERE workday_id = ?
+            AND shift_id = ?
+            AND role_id = ?       
+        """, (workday_id, shift_id, role_id))
+
+        return cursor.fetchone() is not None
     
 
     def create_staffing_requirement(
@@ -184,7 +205,8 @@ class SchedulingRepository:
 
     def update_staffing_requirement(
         self,
-        requirement_id,
+        shift_id,
+        role_id,
         required_count
     ):
 
@@ -193,15 +215,28 @@ class SchedulingRepository:
         cursor.execute("""
             UPDATE StaffingRequirements
             SET required_count = ?
-            WHERE requirement_id = ?
+            WHERE shift_id = ?
+            AND role_id = ?
         """, (
             required_count,
-            requirement_id
+            shift_id,
+            role_id
         ))
 
         self.conn.commit()
 
-        return self.get_staffing_requirement_by_id(requirement_id)
+    def delete_staffing_requirement(self, shift_id, role_id):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            DELETE
+            FROM StaffingRequirements
+            WHERE shift_id = ?
+            AND role_id = ?
+        """, (shift_id, role_id))
+
+        self.conn.commit()
 
     # =========================================================
     # WORKDAYS

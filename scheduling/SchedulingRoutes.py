@@ -7,16 +7,12 @@ from flask import (
 )
 
 from flask_login import login_required
-
 from database.connection import get_db_connection
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
+from scheduling.SchedulingRepository import SchedulingRepository
+from scheduling.SchedulingService import SchedulingService
 
-from scheduling.SchedulingRepository import (
-    SchedulingRepository
-)
-
-from scheduling.SchedulingService import (
-    SchedulingService
-)
 
 scheduling_bp = Blueprint(
     "scheduling",
@@ -39,6 +35,8 @@ def _build_scheduling_service():
 def shift_management():
 
     service, conn = _build_scheduling_service()
+    employee_repository = EmployeeRepository(conn)
+    employee_service = EmployeeService(employee_repository)
 
     try:
 
@@ -48,11 +46,14 @@ def shift_management():
 
         workdays = service.list_workdays()
 
+        roles = employee_service.list_roles()
+
         return render_template(
             "shift_management.html",
             shifts=shifts,
             requirements=requirements,
-            workdays=workdays
+            workdays=workdays,
+            roles=roles
         )
 
     finally:
@@ -132,6 +133,73 @@ def update_shift(shift_id):
             request.form["shift_name"],
             request.form["start_time"],
             request.form["end_time"]
+        )
+
+        return redirect(url_for("scheduling.shift_management"))
+
+    finally:
+        if conn:
+            conn.close()
+
+@scheduling_bp.route("/shift_management/create_staffing_requirement", methods=["POST"])
+@login_required
+def create_staffing_requirement():
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        selected_workdays = request.form.getlist("workday_ids")
+
+        if not selected_workdays:
+            raise ValidationError("At least one workday must be selected.")
+
+        for workday_id in selected_workdays:
+
+            service.create_staffing_requirement(
+                workday_id,
+                request.form["shift_id"],
+                request.form["role_id"],
+                request.form["required_count"]
+            )
+
+        return redirect(url_for("scheduling.shift_management"))
+
+    finally:
+        if conn:
+            conn.close()
+
+@scheduling_bp.route("/shift_management/delete_staffing_requirement", methods=["POST"])
+@login_required
+def delete_staffing_requirement():
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        service.delete_staffing_requirement(
+            request.form["shift_id"],
+            request.form["role_id"]
+        )
+
+        return redirect(url_for("scheduling.shift_management"))
+
+    finally:
+        if conn:
+            conn.close()
+
+@scheduling_bp.route("/shift_management/update_staffing_requirement", methods=["POST"])
+@login_required
+def update_staffing_requirement():
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        service.update_staffing_requirement(
+            request.form["shift_id"],
+            request.form["role_id"],
+            request.form["required_count"]
         )
 
         return redirect(url_for("scheduling.shift_management"))

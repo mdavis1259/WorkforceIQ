@@ -141,6 +141,9 @@ class SchedulingService:
                 "Required count must be greater than zero."
             )
 
+        if self.repository.staffing_requirement_exists(workday_id, shift_id, role_id):
+            return None
+
         return self.repository.create_staffing_requirement(
             workday_id,
             shift_id,
@@ -150,13 +153,19 @@ class SchedulingService:
 
     def update_staffing_requirement(
         self,
-        requirement_id,
+        shift_id,
+        role_id,
         required_count
     ):
 
-        if requirement_id is None:
+        if shift_id is None:
             raise ValidationError(
-                "Requirement ID is required."
+                "Shift ID is required."
+            )
+
+        if role_id is None:
+            raise ValidationError(
+                "Role ID is required."
             )
 
         if required_count is None:
@@ -169,21 +178,29 @@ class SchedulingService:
                 "Required count must be greater than zero."
             )
 
-        existing_requirement = (
-            self.repository.get_staffing_requirement_by_id(
-                requirement_id
-            )
-        )
-
-        if existing_requirement is None:
-            raise ValidationError(
-                "Staffing requirement not found."
-            )
-
         return self.repository.update_staffing_requirement(
-            requirement_id,
+            shift_id,
+            role_id,
             required_count
         )
+
+    def delete_staffing_requirement(
+        self,
+        shift_id,
+        role_id
+    ):
+
+        if shift_id is None:
+            raise ValidationError(
+                "Shift ID is required."
+            )
+
+        if role_id is None:
+            raise ValidationError(
+                "Role ID is required."
+            )
+
+        self.repository.delete_staffing_requirement(shift_id, role_id)
 
     # ==================================================
     # WORKDAYS
