@@ -45,6 +45,21 @@
         </div>
 
         <div class="module-card" {% if level == 1 %}hidden{% endif %}>
+            <h2>Shift Management</h2>
+
+            <p>
+                Create and maintain shift definitions used
+                by availability planning and scheduling.
+            </p>
+
+            <a href="{{ url_for('shift.list_shifts') }}">
+                <button class="btn">
+                    Open Module
+                </button>
+            </a>
+        </div>
+
+        <div class="module-card" {% if level == 1 %}hidden{% endif %}>
             <h2>Forecasting</h2>
             <p>Enter historical data to forecast sales and project labor cost.</p>
 	    <a href="/forecast">
