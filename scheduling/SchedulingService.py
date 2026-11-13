@@ -243,5 +243,33 @@ class SchedulingService:
 
         return schedule
     
+    # ===================================================
+    # ASSIGNMENTS
+    # ===================================================
+    def create_assignment(
+        self,
+        schedule_id,
+        employee_id,
+        role_id,
+        shift_id,
+        schedule_date,
+        hours
+    ):
+        if schedule_id is None:
+            raise ValidationError("Schedule ID is required.")
 
+        return self.repository.create_assignment(
+            schedule_id,
+            employee_id,
+            role_id,
+            shift_id,
+            schedule_date,
+            hours
+        )
+
+    def get_assignments(
+        self,
+        schedule_id
+    ):
+        return self.repository.get_assignments(schedule_id)
     
