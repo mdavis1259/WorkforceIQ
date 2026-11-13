@@ -107,11 +107,13 @@ class UserService:
         username,
         system_role_id,
         employee_id,
+        password_hash=None,
         force_password_reset=True
     ):
         """
         Create a WorkforceIQ user account.
         """
+
 
         if not username:
             raise ValidationError(
@@ -139,8 +141,11 @@ class UserService:
 
         # Temporary password.
         # User will create their own on first login.
-        temporary_password = secrets.token_urlsafe(12)
-        password_hash = generate_password_hash(temporary_password)
+        if password_hash is None:
+            temporary_password = secrets.token_urlsafe(12)
+            password_hash = generate_password_hash(temporary_password)
+        else:
+            temporary_password = None
 
         user = User(
             userid=None,

@@ -61,7 +61,8 @@ class UserManagementTests(unittest.TestCase):
                 password TEXT NOT NULL,
                 system_role_id INTEGER NOT NULL,
                 employee_id INTEGER NOT NULL,
-                active INTEGER NOT NULL DEFAULT 1
+                active INTEGER NOT NULL DEFAULT 1,
+                force_password_reset INTEGER NOT NULL DEFAULT 1
             );
             """
         )
@@ -73,13 +74,15 @@ class UserManagementTests(unittest.TestCase):
                 password,
                 system_role_id,
                 employee_id,
-                active
+                active,
+                force_password_reset
             )
             VALUES(
                 'admin',
                 'hash',
                 3,
                 100,
+                1,
                 1
             )
             """
@@ -119,7 +122,9 @@ class UserManagementTests(unittest.TestCase):
             username="testuser",
             password="hash",
             system_role_id=1,
-            employee_id=200
+            employee_id=200,
+            active=1,
+            force_password_reset=1
         )
 
         created_user = (
