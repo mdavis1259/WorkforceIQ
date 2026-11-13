@@ -555,7 +555,63 @@ class SchedulingTests(unittest.TestCase):
         self.assertIsNotNone(schedule)
 
         self.assertEqual(schedule["week_start"], "2026-11-09")
+    
+    def test_create_assignment_persists_record(self):
         
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.create_schedule("2026-11-09")
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+        
+        finally:
+            conn.close()
+
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT employee_id
+                FROM ShiftAssignments
+                """
+            ),
+            [(101,)]
+        )
+
+    def test_get_assignments_returns_rows(self):
+        
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.create_schedule("2026-11-09")
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+
+            assignments = service.get_assignments(schedule["schedule_id"])
+        
+        finally:
+            conn.close()
+        
+        self.assertEqual(len(assignments), 1)
+
+        self.assertEqual(assignments[0]["employee_id"], 101)
+
 
 if __name__ == "__main__":
     unittest.main()
