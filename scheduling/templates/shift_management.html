@@ -58,6 +58,11 @@
         margin-bottom: 10px;
     }
 
+    .staffing-workdays {
+        max-width: 350px;
+        white-space: normal;
+    }
+
     .workday-options {
         display: flex;
         flex-wrap: wrap;
@@ -356,17 +361,153 @@
 
 </table>
 
-<h3>Staffing Requirements</h3>
+<hr>
+
+<div class="header-row">
+
+    <h3>Staffing Requirements</h3>
+
+    <button
+        type="button"
+        class="settings-button"
+        onclick="toggleRequirementSettings()"
+    >
+        <span>⚙</span>
+        <span>Settings</span>
+    </button>
+
+</div>
+
+<div
+    id="requirement-settings"
+    class="settings-panel"
+>
+
+    <h3>Create Staffing Requirement</h3>
+
+    <p style="margin-bottom: 20px;">
+        Define the minimum staffing level for a
+        role and shift, then select which
+        workdays the rule should apply to.
+    </p>
+
+    <form
+        method="POST"
+        action="{{ url_for(
+            'scheduling.create_staffing_requirement'
+        ) }}"
+    >
+
+        <div class="form-group">
+
+            <label>Shift</label>
+
+            <select
+                name="shift_id"
+                required
+            >
+
+                {% for shift in shifts %}
+
+                <option
+                    value="{{ shift.shift_id }}"
+                >
+                    {{ shift.shift_name }}
+                </option>
+
+                {% endfor %}
+
+            </select>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Role</label>
+
+            <select
+                name="role_id"
+                required
+            >
+
+                {% for role in roles %}
+
+                <option
+                    value="{{ role.role_id }}"
+                >
+                    {{ role.role_name }}
+                </option>
+
+                {% endfor %}
+
+            </select>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>
+                Required Count
+            </label>
+
+            <input
+                type="number"
+                name="required_count"
+                min="1"
+                required
+            >
+
+        </div>
+
+        <h4
+            style="
+                margin-top: 25px;
+                margin-bottom: 15px;
+            "
+        >
+            Apply To
+        </h4>
+
+        <div class="workday-options">
+
+            {% for day in workdays %}
+
+            <label>
+
+                <input
+                    type="checkbox"
+                    name="workday_ids"
+                    value="{{ day.workday_id }}"
+                >
+
+                {{ day.day_name }}
+
+            </label>
+
+            {% endfor %}
+
+        </div>
+
+        <button type="submit">
+            Create Requirement
+        </button>
+
+    </form>
+
+</div>
 
 <table>
 
     <thead>
 
         <tr>
-            <th>Day</th>
+
             <th>Shift</th>
+            <th>Workdays</th>
             <th>Role</th>
             <th>Required</th>
+            <th>Actions</th>
+
         </tr>
 
     </thead>
@@ -377,10 +518,110 @@
 
         <tr>
 
-            <td>{{ requirement.day_name }}</td>
             <td>{{ requirement.shift_name }}</td>
+
+            <td>{{ requirement.workdays.replace(',', ', ') }}</td>
+
             <td>{{ requirement.role_name }}</td>
+
             <td>{{ requirement.required_count }}</td>
+
+            <td>
+
+                <button
+                    type="button"
+                    onclick="
+                        toggleEditRequirement(
+                            '{{ requirement.shift_id }}',
+                            '{{ requirement.role_id }}'
+                        )
+                    "
+                >
+                    Edit
+                </button>
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'scheduling.delete_staffing_requirement'
+                    ) }}"
+                    style="display:inline;"
+                >
+
+                    <input
+                        type="hidden"
+                        name="shift_id"
+                        value="{{ requirement.shift_id }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="role_id"
+                        value="{{ requirement.role_id }}"
+                    >
+
+                    <button
+                        type="submit"
+                        onclick="
+                            return confirm(
+                                'Delete this staffing rule?'
+                            );
+                        "
+                    >
+                        Delete
+                    </button>
+
+                </form>
+
+            </td>
+
+        </tr>
+
+        <tr
+            id="edit-requirement-{{ requirement.shift_id }}-{{ requirement.role_id }}"
+            style="display:none;"
+        >
+
+            <td colspan="5">
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'scheduling.update_staffing_requirement'
+                    ) }}"
+                >
+
+                    <input
+                        type="hidden"
+                        name="shift_id"
+                        value="{{ requirement.shift_id }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="role_id"
+                        value="{{ requirement.role_id }}"
+                    >
+
+                    <label>
+                        Required Count
+                    </label>
+
+                    <input
+                        type="number"
+                        name="required_count"
+                        min="1"
+                        value="{{ requirement.required_count }}"
+                        required
+                    >
+
+                    <button type="submit">
+                        Save
+                    </button>
+
+                </form>
+
+            </td>
 
         </tr>
 
@@ -447,6 +688,56 @@ function toggleEditShift(shiftId) {
         row.style.display = "table-row";
 
     }
+}
+
+function toggleRequirementSettings() {
+
+    const panel =
+        document.getElementById(
+            "requirement-settings"
+        );
+
+    if (panel.style.display === "block") {
+
+        panel.style.display = "none";
+
+    }
+    else {
+
+        panel.style.display = "block";
+
+    }
+}
+
+function toggleEditRequirement(
+    shiftId,
+    roleId
+) {
+
+    const row =
+        document.getElementById(
+            "edit-requirement-" +
+            shiftId +
+            "-" +
+            roleId
+        );
+
+    if (
+        row.style.display ===
+        "table-row"
+    ) {
+
+        row.style.display =
+            "none";
+
+    }
+    else {
+
+        row.style.display =
+            "table-row";
+
+    }
+
 }
 
 </script>

@@ -42,7 +42,6 @@ from database.connection import get_db_connection
 from user_management.UserRepository import UserRepository
 from user_management.UserService import UserService
 
-
 # =====================================================
 # USER MANAGEMENT BLUEPRINT
 # =====================================================
