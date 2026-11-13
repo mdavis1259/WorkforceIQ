@@ -612,6 +612,52 @@ class SchedulingTests(unittest.TestCase):
 
         self.assertEqual(assignments[0]["employee_id"], 101)
 
+    def test_generate_week_creates_schedule(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.generate_week("2026-11-09")
+
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(schedule)
+
+        self.assertEqual(schedule["week_start"], "2026-11-09")
+
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT COUNT(*)
+                FROM Schedules
+                """
+            ),
+            [(1,)]
+        )
+
+    def test_generate_week_creates_assignments(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            service.create_staffing_requirement(
+                1, # Monday
+                1, # Morning Shift
+                1, # Associate
+                2
+            )
+
+            schedule = service.generate_week("2026-11-09")
+
+            assignments = service.get_assignments(schedule["schedule_id"])
+
+        finally:
+            conn.close()
+
+        self.assertEqual(len(assignments), 2)
 
 if __name__ == "__main__":
     unittest.main()
