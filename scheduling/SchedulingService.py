@@ -88,6 +88,18 @@ class SchedulingService:
             end_time
         )
 
+    def delete_shift(self, shift_id):
+
+        if shift_id is None:
+            raise ValidationError("Shift ID is required.")
+
+        existing_shift = self.repository.get_shift_by_id(shift_id)
+
+        if existing_shift is None:
+            raise ValidationError("Shift not found.")
+
+        self.repository.delete_shift(shift_id)
+
     # ==========================================
     # STAFFING REQUIREMENTS
     # ==========================================
@@ -192,4 +204,3 @@ class SchedulingService:
             raise ValidationError("Workday not found.")
 
         return self.repository.update_workday(workday_id, active)
-        

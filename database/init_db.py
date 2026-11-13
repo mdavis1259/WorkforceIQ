@@ -144,10 +144,15 @@ CREATE TABLE IF NOT EXISTS Forecasts(
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS StaffingRequirements(
     requirement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workday_id INTEGER NOT NULL,
     shift_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
     required_count INTEGER NOT NULL,
             
+
+    FOREIGN KEY (workday_id)
+        REFERENCES Workdays(workday_id)
+
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id),
         
@@ -288,9 +293,9 @@ cursor.executemany(
     VALUES (?, ?, ?)
     """,
     [
-        ('Morning Shift', '2026-11-10T08:00:00', '2026-11-10T12:00:00'),
-        ('Afternoon Shift', '2026-11-10T12:00:00', '2026-11-10T16:00:00'),
-        ('Evening Shift', '2026-11-10T16:00:00', '2026-11-10T20:00:00'),
+        ('Morning Shift', '08:00', '12:00'),
+        ('Afternoon Shift', '12:00', '16:00'),
+        ('Evening Shift', '16:00', '20:00'),
     ],
 )
 

@@ -103,3 +103,39 @@ def create_shift():
         if conn:
             conn.close()
             
+@scheduling_bp.route("/shift_management/delete_shift/<int:shift_id>", methods=["POST"])
+@login_required
+def delete_shift(shift_id):
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        service.delete_shift(shift_id)
+
+        return redirect(url_for("scheduling.shift_management"))
+
+    finally:
+        if conn:
+            conn.close()
+
+@scheduling_bp.route("/shift_management/update_shift/<int:shift_id>", methods=["POST"])
+@login_required
+def update_shift(shift_id):
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        service.update_shift(
+            shift_id,
+            request.form["shift_name"],
+            request.form["start_time"],
+            request.form["end_time"]
+        )
+
+        return redirect(url_for("scheduling.shift_management"))
+
+    finally:
+        if conn:
+            conn.close()
