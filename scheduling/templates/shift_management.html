@@ -274,6 +274,7 @@
             <th>Shift Name</th>
             <th>Start Time</th>
             <th>End Time</th>
+            <th>Actions</th>
 
         </tr>
 
@@ -288,6 +289,64 @@
             <td>{{ shift.shift_name }}</td>
             <td>{{ shift.start_time }}</td>
             <td>{{ shift.end_time }}</td>
+
+            <td>
+
+                <button type="button" onclick="toggleEditShift({{ shift.shift_id }})">
+                    Edit
+                </button>
+
+                <form method="POST" action="{{url_for('scheduling.delete_shift', shift_id=shift.shift_id)}}" style="display:inline;">
+
+                    <button type="submit" onclick="return confirm('Delete this shift?');">
+                        Delete
+                    </button>
+                </form>
+
+            </td>
+
+        </tr>
+
+        <tr id="edit-shift-{{ shift.shift_id }}" style="display:none;">
+
+            <td colspan="4">
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'scheduling.update_shift',
+                        shift_id=shift.shift_id
+                    ) }}"
+                >
+
+                    <input
+                        type="text"
+                        name="shift_name"
+                        value="{{ shift.shift_name }}"
+                        required
+                    >
+
+                    <input
+                        type="time"
+                        name="start_time"
+                        value="{{ shift.start_time[:5] }}"
+                        required
+                    >
+
+                    <input
+                        type="time"
+                        name="end_time"
+                        value="{{ shift.end_time[:5] }}"
+                        required
+                    >
+
+                    <button type="submit">
+                        Save
+                    </button>
+
+                </form>
+
+            </td>
 
         </tr>
 
@@ -367,6 +426,25 @@ function toggleShiftSettings() {
     else {
 
         panel.style.display = "block";
+
+    }
+}
+
+function toggleEditShift(shiftId) {
+
+    const row =
+        document.getElementById(
+            "edit-shift-" + shiftId
+        );
+
+    if (row.style.display === "table-row") {
+
+        row.style.display = "none";
+
+    }
+    else {
+
+        row.style.display = "table-row";
 
     }
 }
