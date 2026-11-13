@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "_employee_styles.html" %}
+<div class="dashboard">
+
+    <h1>
+        {% if is_manager %}Employee Management
+        {% else %}Employee Directory
+        {% endif %}
+    </h1>
+
+    {% include "_messages.html" %}
+
+    <form
+        method="GET"
+        action="{{ url_for('employee.employees') }}"
+        class="emp-toolbar"
+    >
+        <input
+            type="search"
+            name="search"
+            value="{{ search }}"
+            placeholder="Search by name, job role or qualification"
+            aria-label="Search employees"
+        >
+
+        {% if is_manager %}
+        <label class="emp-check">
+            <input
+                type="checkbox"
+                name="show_inactive"
+                value="1"
+                {% if show_inactive %}checked{% endif %}
+            >
+            Show inactive
+        </label>
+        {% endif %}
+
+        <button type="submit" class="emp-btn">Search</button>
+
+        {% if search or show_inactive %}
+        <a class="emp-link" href="{{ url_for('employee.employees') }}">Clear</a>
+        {% endif %}
+
+        {% if is_manager %}
+        <a class="emp-btn emp-btn-primary" href="{{ url_for('employee.new_employee') }}">Add Employee</a>
+        {% endif %}
+    </form>
+
+    <table>
+
+        <tr>
+            <th>First Name</th>
+            <th>Last Name</th>
+            <th>Role Name</th>
+            <th>Account Level</th>
+            <th>Hours (max / preferred)</th>
+            <th>Qualifications</th>
+            <th>Hourly Wage</th>
+            {% if is_manager %}<th></th>{% endif %}
+        </tr>
+
+        {% for emp in employees %}
+
+        <tr class="{% if not emp.active %}emp-inactive{% endif %}">
+            <td>
+                {% if emp.can_view and not is_manager %}
+                <a class="emp-link" href="{{ url_for('employee.employee_detail', employee_id=emp.employee_id) }}">{{ emp.first_name }}</a>
+                {% else %}
+                {{ emp.first_name }}
+                {% endif %}
+            </td>
+            <td>{{ emp.last_name }}</td>
+            <td>{{ emp.role_name }}</td>
+            <td>{{ emp.access_level }}</td>
+            <td>{{ emp.max_hours_per_week }} / {{ emp.preferred_hours_per_week }}</td>
+            <td>
+                {% if emp.qualifications %}
+                    {{ emp.qualifications | join(", ") }}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            <td>
+                {% if emp.hourly_rate is not none %}
+                    ${{ "%.2f"|format(emp.hourly_rate) }}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            {% if is_manager %}
+            <td>
+                {% if not emp.active %}<span class="emp-badge">Inactive</span>{% endif %}
+                {% if emp.can_view %}
+                <a class="emp-link" href="{{ url_for('employee.employee_detail', employee_id=emp.employee_id) }}">View</a>
+                {% endif %}
+                {% if is_manager %}
+                <a class="emp-link" href="{{ url_for('employee.edit_employee', employee_id=emp.employee_id) }}">Edit</a>
+                {% if not emp.active %}
+                <form class="emp-inline" method="POST" action="{{ url_for('employee.reactivate_employee_page', employee_id=emp.employee_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="emp-linkbtn">Reactivate</button>
+                </form>
+                {% endif %}
+                {% endif %}
+            </td>
+            {% endif %}
+        </tr>
+
+        {% else %}
+
+        <tr>
+            <td colspan="{% if is_manager %}8{% else %}7{% endif %}">
+                {% if search %}No employees match "{{ search }}".{% else %}No employees yet.{% endif %}
+            </td>
+        </tr>
+
+        {% endfor %}
+
+    </table>
+
+</div>
+{% endblock %}
