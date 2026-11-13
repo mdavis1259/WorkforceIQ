@@ -374,3 +374,15 @@ class SchedulingRepository:
 
         return cursor.fetchall()
     
+    def get_staffing_requirement_rows(self):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM StaffingRequirements
+            ORDER BY workday_id
+        """)
+
+        return cursor.fetchall()
+        

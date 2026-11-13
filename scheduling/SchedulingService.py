@@ -241,6 +241,21 @@ class SchedulingService:
         
         schedule = self.create_schedule(week_start)
 
+        requirements = (self.repository.get_staffing_requirement_rows())
+
+        for requirement in requirements:
+
+            for _ in range(requirement["required_count"]):
+
+                self.create_assignment(
+                    schedule["schedule_id"],
+                    101, # temporary hardcoded employee
+                    requirement["role_id"],
+                    requirement["shift_id"],
+                    week_start,
+                    8
+                )
+
         return schedule
     
     # ===================================================
