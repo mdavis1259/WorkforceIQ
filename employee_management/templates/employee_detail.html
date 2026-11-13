@@ -61,6 +61,14 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="emp-btn emp-btn-danger">Deactivate</button>
             </form>
+            {% else %}
+            <form
+                method="POST"
+                action="{{ url_for('employee.reactivate_employee_page', employee_id=employee.employee_id) }}"
+            >
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="emp-btn emp-btn-primary">Reactivate</button>
+            </form>
             {% endif %}
             {% endif %}
             <a class="emp-btn" href="{{ url_for('employee.employees') }}">Back to list</a>
