@@ -58,13 +58,19 @@
             <th>Hours (max / preferred)</th>
             <th>Qualifications</th>
             <th>Hourly Wage</th>
-            <th></th>
+            {% if is_manager %}<th></th>{% endif %}
         </tr>
 
         {% for emp in employees %}
 
         <tr class="{% if not emp.active %}emp-inactive{% endif %}">
-            <td>{{ emp.first_name }}</td>
+            <td>
+                {% if emp.can_view and not is_manager %}
+                <a class="emp-link" href="{{ url_for('employee.employee_detail', employee_id=emp.employee_id) }}">{{ emp.first_name }}</a>
+                {% else %}
+                {{ emp.first_name }}
+                {% endif %}
+            </td>
             <td>{{ emp.last_name }}</td>
             <td>{{ emp.role_name }}</td>
             <td>{{ emp.access_level }}</td>
@@ -83,6 +89,7 @@
                     —
                 {% endif %}
             </td>
+            {% if is_manager %}
             <td>
                 {% if not emp.active %}<span class="emp-badge">Inactive</span>{% endif %}
                 {% if emp.can_view %}
@@ -90,14 +97,21 @@
                 {% endif %}
                 {% if is_manager %}
                 <a class="emp-link" href="{{ url_for('employee.edit_employee', employee_id=emp.employee_id) }}">Edit</a>
+                {% if not emp.active %}
+                <form class="emp-inline" method="POST" action="{{ url_for('employee.reactivate_employee_page', employee_id=emp.employee_id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="emp-linkbtn">Reactivate</button>
+                </form>
+                {% endif %}
                 {% endif %}
             </td>
+            {% endif %}
         </tr>
 
         {% else %}
 
         <tr>
-            <td colspan="8">
+            <td colspan="{% if is_manager %}8{% else %}7{% endif %}">
                 {% if search %}No employees match "{{ search }}".{% else %}No employees yet.{% endif %}
             </td>
         </tr>

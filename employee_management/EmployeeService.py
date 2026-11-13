@@ -118,6 +118,15 @@ class EmployeeService:
             raise NotFoundError(f"Employee {employee_id} was not found.")
         self.repository.commit()
 
+    def reactivate_employee(self, employee_id):
+        """Undoes a deactivation. The same profile, wage, hours and
+        qualifications come back; nothing was ever deleted."""
+        if not self.repository.set_active(employee_id, True):
+            self.repository.rollback()
+            raise NotFoundError(f"Employee {employee_id} was not found.")
+        self.repository.commit()
+        return self.get_employee(employee_id)
+
     def set_qualifications(self, employee_id, qualification_ids):
         self.get_employee(employee_id)  # raises NotFoundError
         ids = self._validate_qualification_ids(qualification_ids)

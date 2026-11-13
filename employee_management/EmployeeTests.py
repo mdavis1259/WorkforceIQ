@@ -169,6 +169,26 @@ class EmployeeServiceTests(unittest.TestCase):
         with self.assertRaises(NotFoundError):
             self.service.deactivate_employee(999)
 
+    def test_reactivate_restores_the_same_profile(self):
+        created = self.service.create_employee(
+            valid(hourly_rate=21, qualification_ids=[1, 2]))
+        self.service.deactivate_employee(created.employee_id)
+        restored = self.service.reactivate_employee(created.employee_id)
+        self.assertTrue(restored.active)
+        self.assertEqual(restored.employee_id, created.employee_id)
+        self.assertEqual(restored.hourly_rate, 21)
+        self.assertEqual(restored.qualification_ids, (1, 2))
+        self.assertEqual(len(self.service.list_employees()), 1)
+
+    def test_reactivate_active_employee_is_harmless(self):
+        created = self.service.create_employee(valid())
+        self.assertTrue(
+            self.service.reactivate_employee(created.employee_id).active)
+
+    def test_reactivate_missing_raises_not_found(self):
+        with self.assertRaises(NotFoundError):
+            self.service.reactivate_employee(999)
+
     def test_set_qualifications(self):
         created = self.service.create_employee(valid())
         updated = self.service.set_qualifications(created.employee_id, [2, 1, 2])

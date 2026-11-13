@@ -10,6 +10,7 @@ Pages (HTML)
     GET/POST  /employees/new                managers
     GET/POST  /employees/<id>/edit          managers
     POST      /employees/<id>/deactivate    managers
+    POST      /employees/<id>/reactivate    managers
 
 API (JSON, SDS 8.3)
     GET     /api/employees                  managers (?search= &include_inactive= &page= &page_size=)
@@ -17,6 +18,7 @@ API (JSON, SDS 8.3)
     POST    /api/employees                  managers
     PUT     /api/employees/<id>             managers
     DELETE  /api/employees/<id>             managers (deactivates, never deletes)
+    POST    /api/employees/<id>/reactivate  managers (undoes a deactivation)
     PUT     /api/employees/<id>/qualifications   managers
 
 Every POST/PUT/DELETE must send the CSRF token: an X-CSRF-Token header for the
@@ -372,6 +374,18 @@ def deactivate_employee_page(employee_id):
     return redirect(url_for("employee.employees"))
 
 
+@employee_bp.route("/employees/<int:employee_id>/reactivate",
+                   methods=["POST"])
+@manager_required
+def reactivate_employee_page(employee_id):
+    with employee_service() as service:
+        employee = service.reactivate_employee(employee_id)  # 404 if missing
+    flash(f"{employee.first_name} {employee.last_name} was reactivated.",
+          "success")
+    return redirect(url_for("employee.employee_detail",
+                            employee_id=employee_id))
+
+
 # ======================================================================
 # JSON API (SDS 8.3)
 # ======================================================================
@@ -439,6 +453,17 @@ def api_deactivate_employee(employee_id):
     with employee_service() as service:
         service.deactivate_employee(employee_id)
     return "", 204
+
+
+@employee_bp.route("/api/employees/<int:employee_id>/reactivate",
+                   methods=["POST"])
+@manager_required
+def api_reactivate_employee(employee_id):
+    with employee_service() as service:
+        employee = service.reactivate_employee(employee_id)
+        levels = lookups(service)["levels"]
+    return jsonify(employee.to_dict(
+        include_rate=can_see_rate(employee, levels)))
 
 
 @employee_bp.route("/api/employees/<int:employee_id>/qualifications",

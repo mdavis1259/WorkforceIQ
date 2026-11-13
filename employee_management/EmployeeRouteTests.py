@@ -412,6 +412,29 @@ class ApiWriteTests(RouteTestCase):
         bea = [i for i in everyone["items"] if i["first_name"] == "Bea"][0]
         self.assertEqual(bea["active"], False)
 
+    def test_reactivate_brings_the_employee_back(self):
+        self.sign_in("manager")
+        self.client.delete("/api/employees/4", headers=self.headers)
+        response = self.client.post("/api/employees/4/reactivate",
+                                    headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["active"], True)
+        self.assertEqual(self.employee_row(4)[6], 1)
+        self.assertEqual(self.client.get("/api/employees").get_json()["total"], 4)
+
+    def test_reactivate_rules(self):
+        self.sign_in("manager")
+        self.assertEqual(
+            self.client.post("/api/employees/999/reactivate",
+                             headers=self.headers).status_code, 404)
+        self.assertEqual(
+            self.client.post("/api/employees/4/reactivate").status_code, 403)  # no CSRF token
+        self.client = self.client.application.test_client()  # a fresh browser
+        self.sign_in("assoc")
+        self.assertEqual(
+            self.client.post("/api/employees/4/reactivate",
+                             headers=self.headers).status_code, 403)
+
     def test_delete_unknown_employee_is_404(self):
         self.sign_in("manager")
         response = self.client.delete("/api/employees/999",
@@ -466,12 +489,20 @@ class PageTests(RouteTestCase):
             self.assertNotIn(hidden, page)
         self.assertNotIn("Add Employee", page)
         self.assertNotIn("/edit", page)
+        # No actions column for an associate; their own name is the link.
+        self.assertNotIn("<th></th>", page)
+        self.assertNotIn(">View<", page)
+        self.assertIn('href="/employees/3"', page)
+        self.assertNotIn('href="/employees/4"', page)
 
     def test_manager_page_shows_allowed_wages_and_add_button(self):
         self.sign_in("manager")
         page = self.client.get("/employees").data.decode()
         self.assertIn("Employee Management", page)
         self.assertIn("Add Employee", page)
+        self.assertIn("<th></th>", page)       # managers keep the actions column
+        self.assertIn(">View<", page)
+        self.assertIn(">Edit<", page)
         for shown in ("$15.00", "$16.00", "$30.00"):
             self.assertIn(shown, page)
         self.assertNotIn("$40.00", page)       # the Administrator's wage
@@ -624,6 +655,33 @@ class PageTests(RouteTestCase):
         self.assertEqual(self.employee_row(4)[6], 0)
         listing = self.client.get("/employees").data.decode()
         self.assertIn("Bea Associate was deactivated.", listing)
+
+    def test_reactivate_page_and_buttons(self):
+        self.sign_in("manager")
+        self.client.post("/employees/4/deactivate", data={"csrf_token": TOKEN})
+        self.client.get("/employees")  # clears the "deactivated" message
+        listing = self.client.get("/employees?show_inactive=1").data.decode()
+        self.assertIn("Reactivate", listing)
+        detail = self.client.get("/employees/4").data.decode()
+        self.assertIn("Reactivate", detail)
+        response = self.client.post("/employees/4/reactivate",
+                                    data={"csrf_token": TOKEN})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.employee_row(4)[6], 1)
+        detail = self.client.get("/employees/4").data.decode()
+        self.assertIn("Bea Associate was reactivated.", detail)
+        self.assertNotIn("Reactivate", detail)
+
+    def test_reactivate_page_is_for_managers_and_404s(self):
+        self.sign_in("manager")
+        self.assertEqual(
+            self.client.post("/employees/999/reactivate",
+                             data={"csrf_token": TOKEN}).status_code, 404)
+        self.client = self.client.application.test_client()  # a fresh browser
+        self.sign_in("assoc")
+        self.assertEqual(
+            self.client.post("/employees/4/reactivate",
+                             data={"csrf_token": TOKEN}).status_code, 403)
 
     def test_edit_or_deactivate_unknown_employee_is_404(self):
         self.sign_in("manager")
