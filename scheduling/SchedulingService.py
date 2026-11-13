@@ -221,3 +221,27 @@ class SchedulingService:
             raise ValidationError("Workday not found.")
 
         return self.repository.update_workday(workday_id, active)
+
+    # ===================================================
+    # SCHEDULE GENERATION
+    # ===================================================
+
+    def create_schedule(self, week_start):
+        
+        if not week_start:
+            raise ValidationError("Week start date is required.")
+
+        return self.repository.create_schedule(week_start)
+
+    def get_schedule(self, week_start):
+
+        return self.repository.get_schedule_by_week(week_start)
+    
+    def generate_week(self, week_start):
+        
+        schedule = self.create_schedule(week_start)
+
+        return schedule
+    
+
+    
