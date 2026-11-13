@@ -11,7 +11,7 @@ from scheduling.SchedulingRoutes import scheduling_bp
 from ai_assistant.AssistantRoutes import ai_bp
 
 from user_management.User import User
-from user_management.UserRoutes import (user_bp, configure_user_routes)
+from user_management.UserRoutes import user_bp
 from user_management.UserService import UserService
 from user_management.UserRepository import UserRepository
 
@@ -51,9 +51,9 @@ def load_user(user_id):
 
     try:
         user_repository = UserRepository(conn)
-        user_service = UserService(user_repository)
+        service = UserService(user_repository)
 
-        return user_service.get_user_by_id(user_id)
+        return service.get_user_by_id(user_id)
 
     finally:
         conn.close()

@@ -92,6 +92,7 @@ password TEXT NOT NULL,
 system_role_id INTEGER NOT NULL DEFAULT 0,
 employee_id INTEGER NOT NULL,
 active INTEGER NOT NULL DEFAULT 1,
+force_password_reset INTEGER NOT NULL DEFAULT 1,
 
 CONSTRAINT fk_system_role_id
 FOREIGN KEY (system_role_id)

@@ -29,7 +29,6 @@ this repository.
 """
 from user_management.User import User
 
-
 class UserRepository:
     """
     Provides database access for User Management.
@@ -63,10 +62,11 @@ class UserRepository:
         return User(
             userid=row["userid"],
             username=row["username"],
-            password=row["password"],
             system_role_id=row["system_role_id"],
+            force_password_reset=row["force_password_reset"],
+            password=row["password"],
             employee_id=row["employee_id"],
-            active=row["active"]
+            active=row["active"],
         )
 
     def create_user(self, user):
@@ -96,16 +96,18 @@ class UserRepository:
                 password,
                 system_role_id,
                 employee_id,
-                active
+                active,
+                force_password_reset
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 user.username,
                 user.password,
                 user.system_role_id,
                 user.employee_id,
-                int(user.active)
+                int(user.active),
+                int(user.force_password_reset)
             )
         )
 
@@ -267,7 +269,8 @@ class UserRepository:
                 password = ?,
                 system_role_id = ?,
                 employee_id = ?,
-                active = ?
+                active = ?,
+                force_password_reset = ?
             WHERE userid = ?
             """,
             (
@@ -276,6 +279,7 @@ class UserRepository:
                 user.system_role_id,
                 user.employee_id,
                 int(user.active),
+                int(user.force_password_reset),
                 user.userid
             )
         )
@@ -359,6 +363,19 @@ class UserRepository:
 
         return self.get_user_by_id(userid)
     
+    def set_force_password_reset(self, userid, force_password_reset):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            UPDATE Users
+            SET force_password_reset = ?
+            WHERE userid = ?
+        """, (int(force_password_reset), userid))
+
+        self.conn.commit()
+
+        return self.get_user_by_id(userid)
 
     def reset_password(self, userid, password_hash):
         """

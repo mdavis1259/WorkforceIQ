@@ -22,7 +22,8 @@ accounts and permissions.
 from flask import (
     Blueprint,
     jsonify,
-    request
+    request,
+    render_template
 )
 
 from flask_login import (
@@ -37,6 +38,11 @@ from shared.exceptions import (
     PermissionDeniedError
 )
 
+from database.connection import get_db_connection
+from user_management.UserRepository import UserRepository
+from user_management.UserService import UserService
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
 
 # =====================================================
 # USER MANAGEMENT BLUEPRINT
@@ -47,25 +53,6 @@ user_bp = Blueprint(
     __name__,
     template_folder="templates"
 )
-
-
-# =====================================================
-# SERVICE DEPENDENCY
-# =====================================================
-
-user_service = None
-
-
-def configure_user_routes(service):
-    """
-    Inject the UserService dependency.
-
-    Called during application startup.
-    """
-    global user_service
-
-    user_service = service
-
 
 # =====================================================
 # HELPERS
@@ -89,18 +76,6 @@ def _require_administrator():
             "Administrator access required."
         )
 
-def _require_service():
-    """
-    Ensure UserService has been configured.
-
-    UserRoutes depend on UserService being
-    injected during application startup.
-    """
-    if user_service is None:
-        raise RuntimeError(
-            "UserService has not been configured."
-        )
-
 def _user_response(user):
     """
     Convert a User contract object into an
@@ -112,9 +87,38 @@ def _user_response(user):
         "username": user.username,
         "system_role_id": user.system_role_id,
         "employee_id": user.employee_id,
-        "active": user.active
+        "active": user.active,
+        "force_password_reset": user.force_password_reset
     }
 
+def _build_user_service():
+
+    conn = get_db_connection()
+    repository = UserRepository(conn)
+    service = UserService(repository)
+    return service, conn
+
+
+@user_bp.route("/users")
+@login_required
+def users():
+
+    service, conn = _build_user_service()
+
+    try:
+        _require_administrator()
+
+        users = service.list_users()
+
+        employee_service = EmployeeService(EmployeeRepository(conn))
+
+        employees = employee_service.list_employees()
+
+        return render_template("users.html", users=users, employees=employees)
+
+    finally:
+        if conn:
+            conn.close()
 
 # =====================================================
 # GET /api/users
@@ -130,13 +134,13 @@ def list_users():
     Return all active user accounts.
     """
 
-    try:
+    service, conn = _build_user_service()
 
-        _require_service()
+    try:
 
         _require_administrator()
 
-        users = user_service.list_users()
+        users = service.list_users()
 
         return jsonify(
             [
@@ -156,6 +160,9 @@ def list_users():
             }
         ), 403
 
+    finally:
+        if conn:
+            conn.close()
 
 # =====================================================
 # POST /api/users
@@ -171,23 +178,29 @@ def create_user():
     Create a new user account.
     """
 
-    try:
+    service, conn = _build_user_service()
 
-        _require_service()
+    try:
 
         _require_administrator()
 
         data = request.get_json() or {}
 
-        user = user_service.create_user(
+        user, temporary_password = service.create_user(
             username=data.get("username"),
-            password=data.get("password"),
             system_role_id=data.get("system_role_id"),
-            employee_id=data.get("employee_id")
+            employee_id=data.get("employee_id"),
+            force_password_reset=data.get("force_password_reset", True)
         )
 
         return jsonify(
-            _user_response(user)
+            {
+                "user":
+                    _user_response(user),
+                
+                "temporary_password":
+                    temporary_password
+            }
         ), 201
 
     except ValidationError as ex:
@@ -223,6 +236,10 @@ def create_user():
             }
         ), 403
 
+    finally:
+        if conn:
+            conn.close()
+
 
 # =====================================================
 # PATCH /api/users/<userid>
@@ -239,9 +256,9 @@ def update_user(userid):
     or credentials.
     """
 
-    try:
+    service, conn = _build_user_service()
 
-        _require_service()
+    try:
 
         _require_administrator()
 
@@ -249,14 +266,18 @@ def update_user(userid):
 
         if "system_role_id" in data:
 
-            user = user_service.change_role(
+            user = service.change_role(
                 userid,
                 data["system_role_id"]
             )
 
+        elif "force_password_reset" in data:
+
+            user = service.set_force_password_reset(userid, data["force_password_reset"])
+
         elif "password_hash" in data:
 
-            user = user_service.reset_password(
+            user = service.reset_password(
                 userid,
                 data["password_hash"]
             )
@@ -266,7 +287,7 @@ def update_user(userid):
             data["active"] is False
         ):
 
-            user = user_service.deactivate_user(
+            user = service.deactivate_user(
                 userid
             )
 
@@ -329,3 +350,7 @@ def update_user(userid):
                 }
             }
         ), 403
+
+    finally:
+        if conn:
+            conn.close()

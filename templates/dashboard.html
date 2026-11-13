@@ -36,8 +36,12 @@
         <div class="module-card" {% if level != 3 %}hidden{% endif %}>
             <h2>User Management</h2>
             <p>Manage user accounts and permissions.</p>
-        <p> UNDER CONSTRUCTION</p>
-            <button class="btn">Open Module</button>
+
+            <a href="{{ url_for('user.users') }}">
+                <button class="btn">
+                    Open Module
+                </button>
+            </a>
         </div>
 
         <div class="module-card" {% if level == 1 %}hidden{% endif %}>
