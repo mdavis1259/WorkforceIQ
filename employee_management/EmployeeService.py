@@ -129,6 +129,9 @@ class EmployeeService:
             raise
         return self.get_employee(employee_id)
 
+    def get_system_role(self, role_id):
+        return self.repository.get_system_role_id(role_id)
+
     # ----- helpers ------------------------------------------------
     @staticmethod
     def _to_employee(row, qualification_ids):
