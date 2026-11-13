@@ -83,6 +83,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 system_role_id INTEGER NOT NULL DEFAULT 0,
                 employee_id INTEGER NOT NULL,
                 active INTEGER NOT NULL DEFAULT 1,
+                force_password_reset INTEGER NOT NULL DEFAULT 1,
                 FOREIGN KEY (system_role_id) REFERENCES SystemRoles(system_role_id),
                 FOREIGN KEY (employee_id) REFERENCES Employees(employee_id)
             );
