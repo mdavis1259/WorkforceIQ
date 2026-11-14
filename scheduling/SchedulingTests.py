@@ -75,7 +75,10 @@ class SchedulingTests(unittest.TestCase):
                 role_id INTEGER NOT NULL,
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
-                hourly_rate REAL NOT NULL
+                hourly_rate REAL NOT NULL,
+                max_hours_per_week INTEGER NOT NULL DEFAULT 40,
+                preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
+                active INTEGER NOT NULL DEFAULT 1
             );
 
             CREATE TABLE Users(
@@ -155,10 +158,10 @@ class SchedulingTests(unittest.TestCase):
         conn.executemany(
             """
             INSERT INTO Employees
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (101, 1, "April", "Example", 20.0)
+                (101, 1, "April", "Example", 20.0, 40, 32, 1)
             ]
         )
 
@@ -637,35 +640,79 @@ class SchedulingTests(unittest.TestCase):
             [(1,)]
         )
 
-def test_generate_week_creates_assignments(self):
+    def test_generate_week_creates_assignments(self):
 
-    service, conn = self.get_service()
+        service, conn = self.get_service()
 
-    try:
+        try:
 
-        service.create_staffing_requirement(
-            1,
-            1,
-            1,
-            2
+            service.create_staffing_requirement(
+                1,
+                1,
+                1,
+                2
+            )
+
+            schedule = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            1
         )
 
-        schedule = service.generate_week(
-            "2026-11-09"
+    def test_generate_week_assigns_employee_by_role(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            # Associate staffing requirement
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate Role
+                1
+            )
+
+            schedule = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            1
         )
 
-        assignments = service.get_assignments(
-            schedule["schedule_id"]
+        # Verify assigned employee is the Associate
+        self.assertEqual(
+            assignments[0]["employee_id"],
+            101
         )
 
-    finally:
+        self.assertEqual(
+            assignments[0]["role_id"],
+            1
+        )
 
-        conn.close()
 
-    self.assertEqual(
-        len(assignments),
-        1
-    )
 
 if __name__ == "__main__":
     unittest.main()

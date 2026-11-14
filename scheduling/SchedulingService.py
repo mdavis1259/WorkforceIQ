@@ -238,28 +238,37 @@ class SchedulingService:
         return self.repository.get_schedule_by_week(week_start)
     
     def generate_week(self, week_start):
-        
-        # Demo data
-        employees = [101, 102, 103]
-
-        employee_index = 0
 
         schedule = self.create_schedule(week_start)
-
+        
         requirements = (self.repository.get_staffing_requirement_rows())
 
         for requirement in requirements:
 
+            employees = self.repository.get_employees_by_role(requirement["role_id"])
+            
+            if not employees:
+                continue
+
+            available_employees = [
+                e for e in employees
+                if availability_service.is_available(
+                    e["employee_id"],
+                    schedule_date,
+                    shift_id
+                )
+            ]
+            
+            employee = available_employees[0]
+
             self.create_assignment(
                 schedule["schedule_id"],
-                101,
+                employee["employee_id"],
                 requirement["role_id"],
                 requirement["shift_id"],
                 week_start,
                 8
             )
-
-            employee_index += 1
 
         return schedule
     

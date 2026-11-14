@@ -385,4 +385,20 @@ class SchedulingRepository:
         """)
 
         return cursor.fetchall()
-        
+
+    # ======================================
+    # EMPLOYEES
+    # ======================================
+
+    def get_employees_by_role(self, role_id):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Employees
+            WHERE role_id = ?
+            AND active = 1
+        """, (role_id,))
+
+        return cursor.fetchall()
