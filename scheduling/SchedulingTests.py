@@ -22,7 +22,12 @@ class MockAvailabilityService:
     def __init__(self, available):
         self.available = available
 
-    def is_employee_available(self, employee_id, schedule_date, shift_id):
+    def is_employee_available(
+        self, 
+        employee_id, 
+        schedule_date, 
+        shift_id
+    ):
         return self.available
 
 class SchedulingTests(unittest.TestCase):
@@ -787,7 +792,84 @@ class SchedulingTests(unittest.TestCase):
             0
         )
     
+    def test_generate_week_skips_employee_exceeding_weekly_hour_limit(self):
 
+        service, conn = self.get_service(
+            MockAvailabilityService(True)
+        )
+
+        try:
+
+            schedule = service.create_schedule(
+                "2026-11-09"
+            )
+
+            # Employee already at max weekly hours
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                40
+            )
+
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate
+                1
+            )
+
+            generated_schedule = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                generated_schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            0
+        )
+
+    def test_get_employee_hours_for_week(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.create_schedule("2026-11-09")
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-10",
+                8
+            )
+
+            hours = service.repository.get_employee_hours_for_week(101, "2026-11-09")
+        
+        finally:
+            conn.close()
+
+        self.assertEqual(hours, 16)        
 
 if __name__ == "__main__":
     unittest.main()

@@ -262,17 +262,25 @@ class SchedulingService:
 
             candidate_employees = employees
 
+            # Emplyee Availability Filter
             if self.availability_service:
 
                 candidate_employees = [
                     employee
-                    for employee in employees
+                    for employee in candidate_employees
                     if self.availability_service.is_employee_available(
                         employee["employee_id"],
                         schedule_date,
                         requirement["shift_id"]
                     )
                 ]
+
+            # Weekly hour limit filter
+            candidate_employees = [
+                employee
+                for employee in candidate_employees
+                if (self.repository.get_employee_hours_for_week(
+                    employee["employee_id"], week_start) + 8 <= employee["max_hours_per_week"])]
 
             if not candidate_employees:
                 continue
