@@ -871,5 +871,80 @@ class SchedulingTests(unittest.TestCase):
 
         self.assertEqual(hours, 16)        
 
+    def test_generate_week_prevents_overlapping_assignments(self):
+
+        service, conn = self.get_service(
+            MockAvailabilityService(True)
+        )
+
+        try:
+
+            # Existing shift
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate
+                1
+            )
+
+            schedule = service.create_schedule(
+                "2026-11-09"
+            )
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+
+            # Add a second overlapping shift
+            conn.execute(
+                """
+                INSERT INTO Shifts(
+                    shift_id,
+                    shift_name,
+                    start_time,
+                    end_time
+                )
+                VALUES(
+                    2,
+                    'Overlapping Shift',
+                    '12:00',
+                    '20:00'
+                )
+                """
+            )
+
+            conn.commit()
+
+            service.create_staffing_requirement(
+                1,  # Monday
+                2,  # Overlapping Shift
+                1,  # Associate
+                1
+            )
+
+            generated_schedule = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                generated_schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertFalse(
+            any(
+                assignment["shift_id"] == 2
+                for assignment in assignments
+            )
+        )
+
 if __name__ == "__main__":
     unittest.main()
