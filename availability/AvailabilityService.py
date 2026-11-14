@@ -102,3 +102,14 @@ def build_availability_occurrences(data):
         }
         for occurrence in recurrence_starts
     ]
+
+def is_employee_available(employee_id, schedule_date, shift_id):
+    """
+    Scheduling facing availability contract.
+
+    Returns True if the employee is available for the specified shift.
+    """
+
+    raise NotImplementedError(
+        "Availability check not implemented."
+    )

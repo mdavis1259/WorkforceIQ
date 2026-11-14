@@ -17,6 +17,13 @@ from scheduling.SchedulingService import (
 
 from shared.exceptions import ValidationError
 
+class MockAvailabilityService:
+
+    def __init__(self, available):
+        self.available = available
+
+    def is_employee_available(self, employee_id, schedule_date, shift_id):
+        return self.available
 
 class SchedulingTests(unittest.TestCase):
 
@@ -203,7 +210,7 @@ class SchedulingTests(unittest.TestCase):
         conn.commit()
         conn.close()
 
-    def get_service(self):
+    def get_service(self, availability_service=None):
 
         conn = sqlite3.connect(
             self.database_path
@@ -216,7 +223,7 @@ class SchedulingTests(unittest.TestCase):
         )
 
         service = SchedulingService(
-            repository
+            repository, availability_service
         )
 
         return service, conn
@@ -712,6 +719,74 @@ class SchedulingTests(unittest.TestCase):
             1
         )
 
+    def test_generate_week_skips_role_with_no_qualified_employee(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            # Manager role requirement
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                2,  # Manager Role
+                1
+            )
+
+            # Remove all managers
+            conn.execute("""
+                DELETE FROM Employees
+                WHERE role_id = 2
+            """)
+            conn.commit()
+
+            schedule = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            0
+        )
+
+    def test_generate_week_skips_unavailable_employee(self):
+
+        service, conn = self.get_service(MockAvailabilityService(False))
+
+        try:
+
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate
+                1
+            )
+
+            schedule = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            0
+        )
+    
 
 
 if __name__ == "__main__":

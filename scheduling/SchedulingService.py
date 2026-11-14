@@ -1,10 +1,11 @@
 from shared.exceptions import ValidationError
-
+from datetime import datetime, timedelta
 
 class SchedulingService:
 
-    def __init__(self, repository):
+    def __init__(self, repository, availability_service=None):
         self.repository = repository
+        self.availability_service = availability_service
 
     # ==========================================
     # SHIFTS
@@ -237,6 +238,13 @@ class SchedulingService:
 
         return self.repository.get_schedule_by_week(week_start)
     
+    def get_schedule_date(self, week_start, workday_id):
+        start = datetime.fromisoformat(week_start).date()
+
+        schedule_date = (start + timedelta(days=workday_id - 1))
+
+        return schedule_date.isoformat()
+
     def generate_week(self, week_start):
 
         schedule = self.create_schedule(week_start)
@@ -245,28 +253,38 @@ class SchedulingService:
 
         for requirement in requirements:
 
+            schedule_date = self.get_schedule_date(week_start, requirement["workday_id"])
+
             employees = self.repository.get_employees_by_role(requirement["role_id"])
             
             if not employees:
                 continue
 
-            available_employees = [
-                e for e in employees
-                if availability_service.is_available(
-                    e["employee_id"],
-                    schedule_date,
-                    shift_id
-                )
-            ]
-            
-            employee = available_employees[0]
+            candidate_employees = employees
+
+            if self.availability_service:
+
+                candidate_employees = [
+                    employee
+                    for employee in employees
+                    if self.availability_service.is_employee_available(
+                        employee["employee_id"],
+                        schedule_date,
+                        requirement["shift_id"]
+                    )
+                ]
+
+            if not candidate_employees:
+                continue
+
+            employee = candidate_employees[0]
 
             self.create_assignment(
                 schedule["schedule_id"],
                 employee["employee_id"],
                 requirement["role_id"],
                 requirement["shift_id"],
-                week_start,
+                schedule_date,
                 8
             )
 
