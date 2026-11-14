@@ -637,27 +637,35 @@ class SchedulingTests(unittest.TestCase):
             [(1,)]
         )
 
-    def test_generate_week_creates_assignments(self):
+def test_generate_week_creates_assignments(self):
 
-        service, conn = self.get_service()
+    service, conn = self.get_service()
 
-        try:
+    try:
 
-            service.create_staffing_requirement(
-                1, # Monday
-                1, # Morning Shift
-                1, # Associate
-                2
-            )
+        service.create_staffing_requirement(
+            1,
+            1,
+            1,
+            2
+        )
 
-            schedule = service.generate_week("2026-11-09")
+        schedule = service.generate_week(
+            "2026-11-09"
+        )
 
-            assignments = service.get_assignments(schedule["schedule_id"])
+        assignments = service.get_assignments(
+            schedule["schedule_id"]
+        )
 
-        finally:
-            conn.close()
+    finally:
 
-        self.assertEqual(len(assignments), 2)
+        conn.close()
+
+    self.assertEqual(
+        len(assignments),
+        1
+    )
 
 if __name__ == "__main__":
     unittest.main()

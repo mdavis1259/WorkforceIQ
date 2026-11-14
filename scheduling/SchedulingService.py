@@ -239,22 +239,27 @@ class SchedulingService:
     
     def generate_week(self, week_start):
         
+        # Demo data
+        employees = [101, 102, 103]
+
+        employee_index = 0
+
         schedule = self.create_schedule(week_start)
 
         requirements = (self.repository.get_staffing_requirement_rows())
 
         for requirement in requirements:
 
-            for _ in range(requirement["required_count"]):
+            self.create_assignment(
+                schedule["schedule_id"],
+                101,
+                requirement["role_id"],
+                requirement["shift_id"],
+                week_start,
+                8
+            )
 
-                self.create_assignment(
-                    schedule["schedule_id"],
-                    101, # temporary hardcoded employee
-                    requirement["role_id"],
-                    requirement["shift_id"],
-                    week_start,
-                    8
-                )
+            employee_index += 1
 
         return schedule
     

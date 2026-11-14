@@ -207,3 +207,46 @@ def update_staffing_requirement():
     finally:
         if conn:
             conn.close()
+
+@scheduling_bp.route("/schedule/generate", methods=["POST"])
+@login_required
+def generate_schedule():
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        service.generate_week(request.form["week_start"])
+
+        return redirect(url_for("scheduling.schedule", week_start=request.form["week_start"]))
+    
+    finally:
+        if conn:
+            conn.close()
+
+@scheduling_bp.route("/schedule")
+@login_required
+def schedule():
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        schedule = None
+        assignments = []
+
+        week_start = request.args.get("week_start")
+
+        if week_start:
+
+            schedule = service.get_schedule(week_start)
+
+            if schedule:
+
+                assignments = service.get_assignments(schedule["schedule_id"])
+            
+        return render_template("schedule.html", schedule=schedule, assignments=assignments)
+    
+    finally:
+        if conn:
+            conn.close()

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Draft Weekly Schedule</h1>
+
+<form
+    method="post"
+    action="{{ url_for('scheduling.generate_schedule') }}"
+>
+    <label>Week Start Date</label>
+
+    <input
+        type="date"
+        name="week_start"
+        required
+    >
+
+    <button type="submit">
+        Generate Schedule
+    </button>
+
+    {% if schedule %}
+
+    <h2>Draft Schedule Generated</h2>
+
+    <p>
+    Week Start: {{ schedule["week_start"] }}
+    </p>
+
+    <p>
+    Status: {{ schedule["status"] }}
+    </p>
+
+    <p>
+        Assignments found: {{ assignments|length }}
+    </p>
+
+    {% endif %}
+
+    {% if assignments %}
+
+    <h2>Assignments</h2>
+
+    <table>
+        <tr>
+            <th>Employee</th>
+            <th>Date</th>
+            <th>Shift</th>
+        </tr>
+
+        {% for assignment in assignments %}
+        <tr>
+            <td>{{ assignment.employee_id }}</td>
+            <td>{{ assignment.schedule_date }}</td>
+            <td>{{ assignment.shift_id }}</td>
+        </tr>
+        {% endfor %}
+
+    </table>
+
+{% endif %}
+</form>
+
+{% endblock %}
