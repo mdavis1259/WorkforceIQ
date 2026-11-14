@@ -402,3 +402,17 @@ class SchedulingRepository:
         """, (role_id,))
 
         return cursor.fetchall()
+
+    def get_employee_hours_for_week(self, employee_id, week_start):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT COALESCE(SUM(hours), 0)
+            FROM ShiftAssignments
+            WHERE employee_id = ?
+                AND schedule_date >= ?
+                AND schedule_date <= date(?, '+7 days')
+        """, (employee_id, week_start, week_start))
+
+        return cursor.fetchone()[0]
