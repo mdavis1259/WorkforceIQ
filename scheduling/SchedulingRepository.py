@@ -416,3 +416,62 @@ class SchedulingRepository:
         """, (employee_id, week_start, week_start))
 
         return cursor.fetchone()[0]
+
+    def get_employee_assignments_for_date(self, employee_id, schedule_date):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT sa.*,
+                   s.start_time,
+                   s.end_time
+            FROM ShiftAssignments sa
+            JOIN Shifts s
+                ON s.shift_id = sa.shift_id
+            WHERE sa.employee_id = ?
+            AND sa.schedule_date = ?
+        """, (employee_id, schedule_date))
+
+        return cursor.fetchall()
+
+    def has_overlapping_assignment(self, employee_id, schedule_date, shift_id):
+
+        cursor = self.conn.cursor()
+
+        # Candidate shift
+        cursor.execute("""
+            SELECT start_time, end_time
+            FROM Shifts
+            WHERE shift_id = ?
+        """, (shift_id,))
+
+        candidate_shift = cursor.fetchone()
+
+        if candidate_shift is None:
+            return False
+
+        candidate_start = candidate_shift["start_time"]
+        candidate_end = candidate_shift["end_time"]
+
+        # Existing assignments for same employee/date
+        cursor.execute("""
+            SELECT
+                s.start_time,
+                s.end_time
+            FROM ShiftAssignments sa
+            JOIN Shifts s
+                ON s.shift_id = sa.shift_id
+            WHERE sa.employee_id = ?
+            AND sa.schedule_date = ?
+        """, (employee_id, schedule_date))
+
+        assignments = cursor.fetchall()
+
+        for assignment in assignments:
+            existing_start = assignment["start_time"]
+            existing_end = assignment["end_time"]
+
+            if (candidate_start < existing_end and candidate_end > existing_start):
+                return True
+        
+        return False

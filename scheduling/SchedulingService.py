@@ -282,6 +282,17 @@ class SchedulingService:
                 if (self.repository.get_employee_hours_for_week(
                     employee["employee_id"], week_start) + 8 <= employee["max_hours_per_week"])]
 
+            # Overlap filter
+            candidate_employees = [
+                employee
+                for employee in candidate_employees
+                if not self.repository.has_overlapping_assignment(
+                    employee["employee_id"],
+                    schedule_date,
+                    requirement["shift_id"]
+                )
+            ]
+
             if not candidate_employees:
                 continue
 
