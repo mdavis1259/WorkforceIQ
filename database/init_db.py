@@ -218,6 +218,30 @@ cursor.execute("""
     )
 """)
 
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS TimeOffRequests(
+        request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        employee_id INTEGER NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Pending',
+        
+        CONSTRAINT fk_for_employee
+            FOREIGN KEY (employee_id)
+            REFERENCES Employees(employee_id),
+            
+        CONSTRAINT valid status
+            CHECK (
+                status IN (
+                    'Pending',
+                    'Approved',
+                    'Denied',
+                    'Cancelled'
+                )
+            )
+    )
+""")
+
 # Create system roles, keep for final version
 cursor.executemany(
     """

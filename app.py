@@ -8,7 +8,7 @@ from authentication.AuthRoutes import auth_bp
 from availability.AvailabilityRoutes import availability_bp
 from forecasting.ForecastRoutes import forecasting_bp
 from scheduling.SchedulingRoutes import scheduling_bp
-from ai_assistant.AssistantRoutes import ai_bp
+from assistant.AssistantRoutes import ai_bp
 
 from user_management.User import User
 from user_management.UserRoutes import user_bp
