@@ -51,9 +51,11 @@
 
         {% for assignment in assignments %}
         <tr>
-            <td>{{ assignment.employee_id }}</td>
+            <td>{{ assignment.first_name }}
+                {{ assignment.last_name }}
+            </td>
             <td>{{ assignment.schedule_date }}</td>
-            <td>{{ assignment.shift_id }}</td>
+            <td>{{ assignment.shift_name }}</td>
         </tr>
         {% endfor %}
 

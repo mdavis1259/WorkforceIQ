@@ -8,10 +8,12 @@ from flask import (
 
 from flask_login import login_required
 from database.connection import get_db_connection
-from employee_management.EmployeeRepository import EmployeeRepository
 from employee_management.EmployeeService import EmployeeService
+from employee_management.EmployeeRepository import EmployeeRepository
 from scheduling.SchedulingRepository import SchedulingRepository
 from scheduling.SchedulingService import SchedulingService
+from forecasting.ForecastRepository import ForecastRepository
+from forecasting.ForecastService import ForecastService
 
 
 scheduling_bp = Blueprint(
@@ -22,11 +24,22 @@ scheduling_bp = Blueprint(
 
 def _build_scheduling_service():
 
+    # Establish database connection
     conn = get_db_connection()
 
-    repository = SchedulingRepository(conn)
+    # Instantiate repositories for service instantiation
+    scheduling_repository = SchedulingRepository(conn)
+    employee_repository = EmployeeRepository(conn)
+    forecasting_repository = ForecastRepository(conn)
 
-    service = SchedulingService(repository)
+    employee_service = EmployeeService(employee_repository)
+    forecasting_service = ForecastService(forecasting_repository)
+
+    service = SchedulingService(
+        scheduling_repository,
+        employee_service,
+        forecasting_service
+    ) 
 
     return service, conn
 
@@ -35,8 +48,6 @@ def _build_scheduling_service():
 def shift_management():
 
     service, conn = _build_scheduling_service()
-    employee_repository = EmployeeRepository(conn)
-    employee_service = EmployeeService(employee_repository)
 
     try:
 
@@ -46,7 +57,7 @@ def shift_management():
 
         workdays = service.list_workdays()
 
-        roles = employee_service.list_roles()
+        roles = service.employee_service.list_roles()
 
         return render_template(
             "shift_management.html",
@@ -244,7 +255,7 @@ def schedule():
             if schedule:
 
                 assignments = service.get_assignments(schedule["schedule_id"])
-            
+
         return render_template("schedule.html", schedule=schedule, assignments=assignments)
     
     finally:

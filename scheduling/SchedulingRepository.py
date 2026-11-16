@@ -366,10 +366,18 @@ class SchedulingRepository:
         cursor = self.conn.cursor()
 
         cursor.execute("""
-            SELECT *
-            FROM ShiftAssignments
-            WHERE schedule_id = ?
-            ORDER BY schedule_date
+            SELECT
+                sa.*,
+                e.first_name,
+                e.last_name,
+                s.shift_name
+            FROM ShiftAssignments sa
+            JOIN Employees e
+                ON sa.employee_id = e.employee_id
+            JOIN Shifts s
+                ON sa.shift_id = s.shift_id
+            WHERE sa.schedule_id = ?
+            ORDER BY sa.schedule_date
         """, (schedule_id,))
 
         return cursor.fetchall()

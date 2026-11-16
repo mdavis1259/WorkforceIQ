@@ -355,6 +355,73 @@ cursor.executemany(
     ],
 )
 
+staffing_requirements = [
+
+    # Monday
+    (1, 1, 1, 2),  # 2 associates morning
+    (1, 1, 2, 1),  # 1 lead morning
+    (1, 2, 1, 3),  # 3 associates evening
+    (1, 2, 2, 1),  # 1 lead evening
+
+    # Tuesday
+    (2, 1, 1, 2),
+    (2, 1, 2, 1),
+    (2, 2, 1, 3),
+    (2, 2, 2, 1),
+
+    # Wednesday
+    (3, 1, 1, 2),
+    (3, 1, 2, 1),
+    (3, 2, 1, 3),
+    (3, 2, 2, 1),
+
+    # Thursday
+    (4, 1, 1, 2),
+    (4, 1, 2, 1),
+    (4, 2, 1, 3),
+    (4, 2, 2, 1),
+
+    # Friday
+    (5, 1, 1, 3),
+    (5, 1, 2, 1),
+    (5, 2, 1, 4),
+    (5, 2, 2, 1),
+
+    # Saturday
+    (6, 1, 1, 3),
+    (6, 1, 2, 1),
+    (6, 2, 1, 4),
+    (6, 2, 2, 1),
+
+    # Sunday
+    (7, 1, 1, 2),
+    (7, 1, 2, 1),
+    (7, 2, 1, 3),
+    (7, 2, 2, 1),
+]
+
+for (
+    workday_id,
+    shift_id,
+    role_id,
+    required_count
+) in staffing_requirements:
+
+    cursor.execute("""
+        INSERT INTO StaffingRequirements (
+            workday_id,
+            shift_id,
+            role_id,
+            required_count
+        )
+        VALUES (?, ?, ?, ?)
+    """, (
+        workday_id,
+        shift_id,
+        role_id,
+        required_count
+    ))
+
 cursor.executemany(
     """
     INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
