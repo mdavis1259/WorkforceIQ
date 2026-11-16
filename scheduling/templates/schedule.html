@@ -2,7 +2,7 @@
 
 {% block content %}
 
-<h1>Draft Weekly Schedule</h1>
+<h1>Weekly Schedule</h1>
 
 <form
     method="post"
@@ -17,23 +17,67 @@
     >
 
     <button type="submit">
-        Generate Schedule
+        Retrieve Schedule
     </button>
 
     {% if schedule %}
 
-    <h2>Draft Schedule Generated</h2>
-
     <p>
-    Week Start: {{ schedule["week_start"] }}
+        Week Start: {{ schedule["week_start"] }}
     </p>
 
-    <p>
-    Status: {{ schedule["status"] }}
-    </p>
+    <h3>Staffing Requirements Evaluated</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Workday</th>
+                <th>Shift</th>
+                <th>Role</th>
+                <th>Required</th>
+                <th>Assigned</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for req in summary.requirements %}
+            <tr>
+                <td>{{ req.workday }}</td>
+                <td>{{ req.shift }}</td>
+                <td>{{ req.role }}</td>
+                <td>{{ req.required_count }}</td>
+                <td>{{ req.assigned_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Scheduling Summary</h3>
+
+    <table>
+        <tr>
+            <td>Requirements Processed</td>
+            <td>{{ summary.requirements_processed }}</td>
+        </tr>
+
+        <tr>
+            <td>Employees Considered</td>
+            <td>{{ summary.employees_considered }}</td>
+        </tr>
+
+        <tr>
+            <td>Employees Assigned</td>
+            <td>{{ summary.employees_assigned }}</td>
+        </tr>
+
+        <tr>
+            <td>Unfilled Requirements</td>
+            <td>{{ summary.unfilled_requirements }}</td>
+        </tr>
+    </table>
 
     <p>
-        Assignments found: {{ assignments|length }}
+        Status: {{ schedule["status"] }}
     </p>
 
     {% endif %}

@@ -227,9 +227,22 @@ def generate_schedule():
 
     try:
 
-        service.generate_week(request.form["week_start"])
+        week_start = request.form["week_start"]
 
-        return redirect(url_for("scheduling.schedule", week_start=request.form["week_start"]))
+        schedule, summary = service.generate_week(week_start)
+
+        print(summary)
+
+        assignments = service.get_assignments(schedule["schedule_id"])
+        
+        print(assignments)
+
+        return render_template(
+            "schedule.html", 
+            schedule=schedule, 
+            assignments=assignments,
+            summary=summary
+        )
     
     finally:
         if conn:
@@ -245,6 +258,14 @@ def schedule():
 
         schedule = None
         assignments = []
+
+        summary = {
+            "requirements_processed": 0,
+            "employees_considered": 0,
+            "employees_assigned": 0,
+            "unfilled_requirements": 0,
+            "requirements": []
+        }
 
         week_start = request.args.get("week_start")
 

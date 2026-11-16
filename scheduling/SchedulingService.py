@@ -259,24 +259,35 @@ class SchedulingService:
 
         schedule = self.create_schedule(week_start)
         
+        summary = {
+            "requirements_processed": 0,
+            "employees_considered": 0,
+            "employees_assigned": 0,
+            "unfilled_requirements": 0,
+            "requirements": []
+        }
+
         requirements = (self.scheduling_repository.get_staffing_requirement_rows())
+
+        considered_employee_ids = set()
 
         for requirement in requirements:
 
-            required_count = requirement["required_count"]
+            summary["requirements_processed"] += 1
 
-            print(
-                f"Requirement:"
-                f" Workday={requirement['workday_id']}"
-                f" Shift={requirement['shift_id']}"
-                f" Role={requirement['role_id']}"
-                f" Count={required_count}"
-            )
+            required_count = requirement["required_count"]
 
             schedule_date = self.get_schedule_date(week_start, requirement["workday_id"])
 
             employees = self.scheduling_repository.get_employees_by_role(requirement["role_id"])
-            
+
+            for employee in employees:
+                considered_employee_ids.add(employee["employee_id"])
+
+            summary["employees_considered"] = len(considered_employee_ids)
+
+            assigned_count = 0
+
             if not employees:
                 continue
 
@@ -305,6 +316,17 @@ class SchedulingService:
             ]
 
             if not candidate_employees:
+                
+                summary["unfilled_requirements"] += 1
+
+                summary["requirements"].append({
+                    "workday": requirement["day_name"],
+                    "shift": requirement["shift_name"],
+                    "role": requirement["role_name"],
+                    "required_count": required_count,
+                    "assigned_count": 0
+                })
+
                 continue
 
             for i in range(required_count):
@@ -323,7 +345,21 @@ class SchedulingService:
                     8
                 )
 
-        return schedule
+                assigned_count += 1
+                summary["employees_assigned"] += 1
+
+            if assigned_count < required_count:
+                summary["unfilled_requirements"] += 1
+
+            summary["requirements"].append({
+                "workday": requirement["day_name"],
+                "shift": requirement["shift_name"],
+                "role": requirement["role_name"],
+                "required_count": required_count,
+                "assigned_count": assigned_count
+            })
+
+        return schedule, summary
     
     # ===================================================
     # ASSIGNMENTS
