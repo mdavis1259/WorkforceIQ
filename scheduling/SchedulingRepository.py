@@ -367,6 +367,7 @@ class SchedulingRepository:
                 sa.*,
                 e.first_name,
                 e.last_name,
+                e.hourly_rate,
                 s.shift_name
             FROM ShiftAssignments sa
             JOIN Employees e

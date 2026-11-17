@@ -251,7 +251,10 @@ class SchedulingService:
             "employees_considered": 0,
             "employees_assigned": 0,
             "unfilled_requirements": 0,
-            "requirements": []
+            "requirements": [],
+            "daily_labor_cost": {},
+            "daily_labor_budget": {},
+            "daily_variance": {}
         }
 
         requirements = (self.scheduling_repository.get_staffing_requirement_rows())
@@ -332,6 +335,19 @@ class SchedulingService:
                     8
                 )
 
+                print(
+                    employee["first_name"],
+                    employee["hourly_rate"],
+                    schedule_date
+                )
+
+                labor_cost = employee["hourly_rate"] * 8
+
+                if schedule_date not in summary["daily_labor_cost"]:
+                    summary["daily_labor_cost"][schedule_date] = 0
+
+                summary["daily_labor_cost"][schedule_date] += labor_cost
+
                 assigned_count += 1
                 summary["employees_assigned"] += 1
 
@@ -345,6 +361,23 @@ class SchedulingService:
                 "required_count": required_count,
                 "assigned_count": assigned_count
             })
+
+            forecasts = self.forecasting_service.get_forecasts()
+
+            for forecast in forecasts:
+
+                forecast_date = forecast["forecast_date"]
+
+                if forecast_date in summary["daily_labor_cost"]:
+
+                    budget = forecast["labor_budget"]
+
+                    actual = summary["daily_labor_cost"][forecast_date]
+
+                    summary["daily_labor_budget"][forecast_date] = budget
+
+                    summary["daily_variance"][forecast_date] = round(budget - actual, 2)
+
 
         return schedule, summary
     

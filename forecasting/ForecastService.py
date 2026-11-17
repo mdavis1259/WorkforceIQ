@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 class ForecastService:
@@ -8,13 +8,13 @@ class ForecastService:
     def __init__(self, repository):
         self.repository = repository
 
-    def generate_two_week_forecast(self):
+    def generate_two_week_forecast(self, start_date):
         """
         Generate a 14-day staffing forecast
         using historical demand data.
         """
 
-        base_date = date.today()
+        base_date = datetime.fromisoformat(start_date).date()
 
         history = self.repository.get_demand_history()
 
@@ -42,7 +42,7 @@ class ForecastService:
         ):
             forecast_date = (
                 base_date +
-                timedelta(days=len(forecasts) + 1)
+                timedelta(days=len(forecasts))
             ).isoformat()
             
             prediction = float(
@@ -88,3 +88,5 @@ class ForecastService:
 
         return forecasts
     
+    def get_forecasts(self):
+        return self.repository.get_forecasts()

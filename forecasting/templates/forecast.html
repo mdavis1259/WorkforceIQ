@@ -294,6 +294,12 @@
     </span>
 </div>
 
+<form method="POST">
+<label>Forecast Start Date</label>
+<input type="date" name="week_start" required>
+<button type="submit">Retrieve Forecast</button>
+</form>
+
 {% if forecasts %}
 
 <div class="forecast-grid">
