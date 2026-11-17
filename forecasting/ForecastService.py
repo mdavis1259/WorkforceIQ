@@ -8,7 +8,7 @@ class ForecastService:
     def __init__(self, repository):
         self.repository = repository
 
-    def generate_two_week_forecast(self, start_date=None):
+    def generate_two_week_forecast(self, start_date=None, labor_percent=18.0, uncertainty=1.0):
         """
         Generate a 14-day staffing forecast
         using historical demand data.
@@ -87,6 +87,9 @@ class ForecastService:
             })
 
         return forecasts
+
+    def generate_draft_forecast(self, labor_percent=18.0, uncertainty=1.0):
+        return self.generate_two_week_forecast()
     
     def get_forecasts(self):
         return self.repository.get_forecasts()
