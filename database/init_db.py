@@ -137,7 +137,8 @@ CREATE TABLE IF NOT EXISTS Forecasts(
     projected_sales_low REAL NOT NULL,
     projected_sales_high REAL NOT NULL,
     required_labor_hours REAL,
-    labor_budget REAL NOT NULL
+    labor_budget REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Draft'
 )
 """)
 
