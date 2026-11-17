@@ -1,51 +1,28 @@
-# The Controller checks login and role, 
-# and checks the length of the question.
-# It must not contain business logic.
-from flask import jsonify
+"""Controller (SDS section 7, step 1).
+
+Checks login and role and the question length, then hands off to
+AssistantService. It contains no business logic.
+"""
+from flask import current_app
 from flask_login import current_user
 
-from shared.exceptions import (PermissionDeniedError, ValidationError)
-from assistant.IntentParser import IntentParser
+from assistant.AssistantService import AssistantService
+from assistant.AssistantData import build_default_data
+from assistant.OllamaClient import OllamaClient
 
 
 class Controller:
+    def _service(self):
+        factory = current_app.config.get("ASSISTANT_SERVICE_FACTORY")
+        if factory:
+            return factory()
+        return AssistantService(build_default_data(), OllamaClient())
 
-    MAX_QUESTION_LENGTH = 500
-    MIN_QUESTION_LENGTH = 3
-
-    def __init__(self):
-        self.intent_parser = IntentParser()
-
-    def query(self, request):
-
-        # role check
-        if current_user.system_role_id < 2:
-            
-            raise PermissionDeniedError(
-                "AI Assistant requires Manager role."
-            )
-
-        question = request.form.get("question", "").strip()
-
-        if not question:
-        
-            raise ValidationError("Please type a question.")
-
-        # length validation
-        if len(question) < self.MIN_QUESTION_LENGTH:
-
-            raise ValidationError("Question must be at least 3 characters.")
-
-
-        if len(question) > self.MAX_QUESTION_LENGTH:
-
-            raise ValidationError("Question exceeds maximum length.")
-
-        # hand off to next pipeline stage
-        return self.intent_parser.parse(question)
+    def query(self, question):
+        # Role and length are checked inside AssistantService.ask so the
+        # same rules protect every entry point (SDS 8.8).
+        return self._service().ask(question, current_user)
 
     def health(self):
-
-        return jsonify({
-            "status": "healthy"
-        })
+        return {"status": "healthy",
+                "ollama": "up" if OllamaClient().is_available() else "down"}

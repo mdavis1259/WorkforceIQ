@@ -1,72 +1,74 @@
-# The Response Builder builds the answer from a template 
-# and attaches the supporting records.
-# It must not add facts that did not come from the database.
+"""ResponseBuilder (SDS section 7, step 6).
+
+Builds the answer from a template and attaches the supporting records. Every
+fact in the answer comes from the database results, never from the model.
+Wages are never included.
+"""
+SUPPORTED_TEXT = ("I can answer three kinds of questions: who is available "
+                  "for a shift, who is qualified for a shift, and whether a "
+                  "schedule stays within budget.")
+
+
+def _plural(count, word):
+    return f"{count} {word}" + ("" if count == 1 else "s")
+
 
 class ResponseBuilder:
+    def unsupported(self, degraded):
+        return self._base("unsupported", None, SUPPORTED_TEXT, [], True, degraded)
 
-    def build(self, intent, results):
+    def needs_clarification(self, intent, message):
+        return self._base("needs_clarification", intent.get("query_type"),
+                          message, [], True, intent.get("degraded", False))
 
-        query_type = intent.get("query_type")
+    def unavailable(self, intent, message):
+        return self._base("unsupported", intent.get("query_type"), message,
+                          [], True, intent.get("degraded", False))
 
-        if query_type == "AVAILABLE_FOR_SHIFT":
-            return self._build_available_response(intent, results)
+    def answered(self, intent, plan, checked):
+        context = plan["context"]
+        roles = context.get("roles", {})
+        people = [{
+            "employee_id": e.employee_id,
+            "name": f"{e.first_name} {e.last_name}",
+            "role": roles.get(e.role_id, ""),
+            "reasons": self._reasons(intent, context, e),
+        } for e in checked["employees"]]
+        count = _plural(len(people), "employee")
+        shift = context.get("shift_name")
+        day = context.get("date")
+        where = f" for the {shift}" if shift else ""
+        when = f" on {day}" if day else ""
+        if intent["query_type"] == "AVAILABLE_FOR_SHIFT":
+            answer = f"{count} {'is' if len(people) == 1 else 'are'} available{where}{when}."
+        else:
+            role = (context.get("role") or context.get("qualification") or ("", ""))[1]
+            answer = f"{count} {'is' if len(people) == 1 else 'are'} qualified as {role}{where}{when}."
+        # Anyone who broke a rule was already removed by the RuleValidator,
+        # so every returned employee passes. Removed ones are listed.
+        return self._base("answered", intent["query_type"], answer, people,
+                          True, intent.get("degraded", False),
+                          checked["violations"])
 
-        if query_type == "QUALIFIED_FOR_SHIFT":
-            return self._build_qualified_response(intent, results)
-        
-        if query_type == "SCHEDULE_WITHIN_BUDGET":
-            return self._build_budget_response(intent, results)
+    @staticmethod
+    def _reasons(intent, context, employee):
+        reasons = []
+        if context.get("shift_name"):
+            reasons.append(f"Marked available for {context['shift_name']}")
+        role = context.get("role")
+        if role and employee.role_id == role[0]:
+            reasons.append(f"Role: {role[1]}")
+        qual = context.get("qualification")
+        if qual and qual[0] in employee.qualification_ids:
+            reasons.append(f"Qualification: {qual[1]}")
+        return reasons
 
-        return {
-            "status": "unsupported",
-            "answer": (
-                "Supported query types are "
-                "AVAILABLE_FOR_SHIFT, "
-                "QUALIFIED_FOR_SHIFT, and"
-                "SCHEDULE_WITHIN_BUDGET."
-            ),
-            "employees": [],
-            "validation": {
-                "passed": False
-            },
-            "degraded": intent.get("degraded", False)
-        }
-
-    def _build_available_response(self, intent, results):
-
-         return {
-             "status": "answered",
-             "query_type": intent.get("query_type"),
-             "answer": "Available employees found.",
-             "employees": results,
-             "validation": {
-                 "passed": True
-             },
-             "degraded":intent.get("degraded", False)
-         }
-
-    def _build_qualified_response(self, intent, results):
-
-        return {
-            "status": "answered",
-            "query_type": intent.get("query_type"),
-            "answer": "Qualified employees found.",
-            "employees": results,
-            "validation": {
-                "passed": True
-            },
-            "degraded": intent.get("degraded", False)
-        }
-
-    def _build_budget_response(self, intent, results):
-
-        return {
-            "status": "answered",
-            "query_type": intent.get("query_type"),
-            "answer": "Budget analysis not yet implemented.",
-            "employees": [],
-            "validation": {
-                "passed": True
-            },
-            "degraded": intent.get("degraded", False)
-        }
+    @staticmethod
+    def _base(status, query_type, answer, employees, passed, degraded,
+              violations=None):
+        validation = {"passed": passed}
+        if violations:
+            validation["removed"] = violations
+        return {"status": status, "query_type": query_type, "answer": answer,
+                "employees": employees, "validation": validation,
+                "degraded": degraded}

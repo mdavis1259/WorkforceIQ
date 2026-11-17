@@ -230,7 +230,7 @@ cursor.execute("""
             FOREIGN KEY (employee_id)
             REFERENCES Employees(employee_id),
             
-        CONSTRAINT valid status
+        CONSTRAINT valid_status
             CHECK (
                 status IN (
                     'Pending',

@@ -2,21 +2,36 @@
 
 {% block content %}
 <h1>AI Assistant</h1>
-<p>Type your question in the box below</p>
+<p>Ask who is available for a shift, who is qualified for a shift, or whether a schedule stays within budget.</p>
 
 <form method="POST">
-
-    <input
-        type="text"
-        name="question"
-        placeholder="Ask WorkforceIQ"
-    >
-
-    <button>
-        Submit
-    </button>
-
+    <input type="text" name="question" placeholder="Who is available to cover the Friday evening shift?" size="60" maxlength="500" required>
+    <button>Submit</button>
 </form>
 
-<p>{{ response }}</p>
+{% if error %}
+<p class="error">{{ error }}</p>
+{% endif %}
+
+{% if response %}
+<h2>Answer</h2>
+<p>{{ response.answer }}</p>
+{% if response.degraded %}
+<p><em>The AI model was not available, so a simple keyword search understood this question.</em></p>
+{% endif %}
+{% if response.employees %}
+<table class="table">
+    <thead><tr><th>Name</th><th>Role</th><th>Why</th></tr></thead>
+    <tbody>
+    {% for person in response.employees %}
+        <tr>
+            <td>{{ person.name }}</td>
+            <td>{{ person.role }}</td>
+            <td>{{ person.reasons | join("; ") }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endif %}
 {% endblock %}
