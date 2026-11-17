@@ -532,8 +532,7 @@
                     type="button"
                     onclick="
                         toggleEditRequirement(
-                            '{{ requirement.shift_id }}',
-                            '{{ requirement.role_id }}'
+                            '{{ requirement.requirement_id }}'
                         )
                     "
                 >
@@ -550,14 +549,8 @@
 
                     <input
                         type="hidden"
-                        name="shift_id"
-                        value="{{ requirement.shift_id }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="role_id"
-                        value="{{ requirement.role_id }}"
+                        name="requirement_id"
+                        value="{{ requirement.requirement_id }}"
                     >
 
                     <button
@@ -578,7 +571,7 @@
         </tr>
 
         <tr
-            id="edit-requirement-{{ requirement.shift_id }}-{{ requirement.role_id }}"
+            id="edit-requirement-{{ requirement.requirement_id }}"
             style="display:none;"
         >
 
@@ -593,14 +586,8 @@
 
                     <input
                         type="hidden"
-                        name="shift_id"
-                        value="{{ requirement.shift_id }}"
-                    >
-
-                    <input
-                        type="hidden"
-                        name="role_id"
-                        value="{{ requirement.role_id }}"
+                        name="requirement_id"
+                        value="{{ requirement.requirement_id }}"
                     >
 
                     <label>
@@ -710,16 +697,13 @@ function toggleRequirementSettings() {
 }
 
 function toggleEditRequirement(
-    shiftId,
-    roleId
+    requirementId
 ) {
 
     const row =
         document.getElementById(
             "edit-requirement-" +
-            shiftId +
-            "-" +
-            roleId
+            requirementId
         );
 
     if (

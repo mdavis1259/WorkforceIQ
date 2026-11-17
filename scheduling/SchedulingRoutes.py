@@ -189,8 +189,7 @@ def delete_staffing_requirement():
     try:
 
         service.delete_staffing_requirement(
-            request.form["shift_id"],
-            request.form["role_id"]
+            request.form["requirement_id"],
         )
 
         return redirect(url_for("scheduling.shift_management"))
@@ -208,8 +207,7 @@ def update_staffing_requirement():
     try:
 
         service.update_staffing_requirement(
-            request.form["shift_id"],
-            request.form["role_id"],
+            request.form["requirement_id"],
             request.form["required_count"]
         )
 

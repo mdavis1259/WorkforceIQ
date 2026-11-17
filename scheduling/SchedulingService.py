@@ -160,19 +160,13 @@ class SchedulingService:
 
     def update_staffing_requirement(
         self,
-        shift_id,
-        role_id,
+        requirement_id,
         required_count
     ):
 
-        if shift_id is None:
+        if requirement_id is None:
             raise ValidationError(
-                "Shift ID is required."
-            )
-
-        if role_id is None:
-            raise ValidationError(
-                "Role ID is required."
+                "Requirement ID is required."
             )
 
         if required_count is None:
@@ -186,28 +180,21 @@ class SchedulingService:
             )
 
         return self.scheduling_repository.update_staffing_requirement(
-            shift_id,
-            role_id,
+            requirement_id,
             required_count
         )
 
     def delete_staffing_requirement(
         self,
-        shift_id,
-        role_id
+        requirement_id
     ):
 
-        if shift_id is None:
+        if requirement_id is None:
             raise ValidationError(
-                "Shift ID is required."
+                "Requirement ID is required."
             )
 
-        if role_id is None:
-            raise ValidationError(
-                "Role ID is required."
-            )
-
-        self.scheduling_repository.delete_staffing_requirement(shift_id, role_id)
+        self.scheduling_repository.delete_staffing_requirement(requirement_id)
 
     # ==================================================
     # WORKDAYS
