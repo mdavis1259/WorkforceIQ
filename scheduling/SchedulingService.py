@@ -362,7 +362,10 @@ class SchedulingService:
                 "assigned_count": assigned_count
             })
 
-            forecasts = self.forecasting_service.get_forecasts()
+            forecasts = []
+
+            if self.forecasting_service:
+                forecasts = self.forecasting_service.get_forecasts()
 
             for forecast in forecasts:
 

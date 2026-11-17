@@ -8,13 +8,18 @@ class ForecastService:
     def __init__(self, repository):
         self.repository = repository
 
-    def generate_two_week_forecast(self, start_date):
+    def generate_two_week_forecast(self, start_date=None):
         """
         Generate a 14-day staffing forecast
         using historical demand data.
         """
 
-        base_date = datetime.fromisoformat(start_date).date()
+        if start_date:
+            base_date = datetime.fromisoformat(start_date).date()
+        
+        else:
+
+            base_date = date.today()
 
         history = self.repository.get_demand_history()
 

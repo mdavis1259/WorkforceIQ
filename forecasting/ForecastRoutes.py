@@ -32,6 +32,10 @@ def forecast():
 
             forecasts = service.generate_two_week_forecast(week_start)
 
+        else:
+
+            forecasts = service.generate_two_week_forecast()
+
     finally:
         if conn:
             conn.close()
