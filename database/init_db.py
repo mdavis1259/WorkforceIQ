@@ -148,8 +148,7 @@ CREATE TABLE IF NOT EXISTS StaffingRequirements(
     workday_id INTEGER NOT NULL,
     shift_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
-    required_count INTEGER NOT NULL,
-            
+    required_count INTEGER NOT NULL,          
 
     FOREIGN KEY (workday_id)
         REFERENCES Workdays(workday_id)
@@ -209,7 +208,7 @@ cursor.execute("""
         employee_id INTEGER NOT NULL,
         shift_id INTEGER NOT NULL,
         availability INTEGER NOT NULL DEFAULT 1,
-        
+
         CONSTRAINT fk_employee_id
             FOREIGN KEY (employee_id)
             REFERENCES Employees(employee_id),
@@ -233,6 +232,23 @@ cursor.executemany(
         (1, 'Associate', 'Regular employee with limited access'),
         (2, 'Manager', 'Manager with view of Employees and ability to make schedules'),
         (3, 'Administrator', 'Administrator with full access')
+    ]
+)
+
+# Create Workdays, keep for final version
+cursor.executemany(
+    """
+    INSERT INTO Workdays (workday_id, day_name, active)
+    VALUES (?, ?, ?)
+    """,
+    [
+        (0, 'Monday', 1),
+        (1, 'Tuesday', 1),
+        (2, 'Wednesday', 1),
+        (3, 'Thursday', 1),
+        (4, 'Friday', 1),
+        (5, 'Saturday', 1),
+        (6, 'Sunday', 1)
     ]
 )
 
