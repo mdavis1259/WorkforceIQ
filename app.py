@@ -11,7 +11,7 @@ from scheduling.SchedulingRoutes import scheduling_bp
 from ai_assistant.AssistantRoutes import ai_bp
 
 from user_management.User import User
-from user_management.UserRoutes import (user_bp, configure_user_routes)
+from user_management.UserRoutes import user_bp
 from user_management.UserService import UserService
 from user_management.UserRepository import UserRepository
 

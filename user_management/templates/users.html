@@ -1,7 +1,38 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <h2>User Management</h2>
 
-<p>User administration interface under development.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Employee ID</th>
+            <th>Active</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for user in users %}
+        <tr>
+            <td>{{ user.username }}</td>
+            <td>{{ user.system_role_id }}</td>
+            <td>{{ user.employee_id }}</td>
+            <td>{{ "Yes" if user.active else "No" }}</td>
+            <td>
+                <button>Edit</button>
+                <button>Deactivate</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p>
+    <button>Create User</button>
+</p>
+
 {% endblock %}

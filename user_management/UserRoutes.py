@@ -22,7 +22,8 @@ accounts and permissions.
 from flask import (
     Blueprint,
     jsonify,
-    request
+    request,
+    render_template
 )
 
 from flask_login import (
@@ -37,6 +38,9 @@ from shared.exceptions import (
     PermissionDeniedError
 )
 
+from database.connection import get_db_connection
+from user_management.UserRepository import UserRepository
+from user_management.UserService import UserService
 
 # =====================================================
 # USER MANAGEMENT BLUEPRINT
@@ -50,24 +54,6 @@ user_bp = Blueprint(
 
 
 # =====================================================
-# SERVICE DEPENDENCY
-# =====================================================
-
-user_service = None
-
-
-def configure_user_routes(service):
-    """
-    Inject the UserService dependency.
-
-    Called during application startup.
-    """
-    global user_service
-
-    user_service = service
-
-
-# =====================================================
 # HELPERS
 # =====================================================
 
@@ -76,7 +62,6 @@ def configure_user_routes(service):
 # 2 = Manager
 # 3 = Administrator
 ADMINISTRATOR_ROLE_ID = 3
-
 
 def _require_administrator():
     """
@@ -88,18 +73,18 @@ def _require_administrator():
         raise PermissionDeniedError(
             "Administrator access required."
         )
+    
 
-def _require_service():
-    """
-    Ensure UserService has been configured.
+def _build_user_service():
 
-    UserRoutes depend on UserService being
-    injected during application startup.
-    """
-    if user_service is None:
-        raise RuntimeError(
-            "UserService has not been configured."
-        )
+    conn = get_db_connection()
+
+    repository = UserRepository(conn)
+
+    service = UserService(repository)
+
+    return service, conn
+
 
 def _user_response(user):
     """
@@ -116,6 +101,27 @@ def _user_response(user):
     }
 
 
+@user_bp.route("/users")
+@login_required
+def users():
+    
+    service, conn = _build_user_service()
+
+    try:
+
+        _require_administrator
+
+        users = service.list_users()
+
+        return render_template(
+            "users.html",
+            users=users
+        )
+
+    finally:
+        if conn:
+            conn.close()
+
 # =====================================================
 # GET /api/users
 # =====================================================
@@ -130,13 +136,13 @@ def list_users():
     Return all active user accounts.
     """
 
-    try:
+    service, conn = _build_user_service()
 
-        _require_service()
+    try:
 
         _require_administrator()
 
-        users = user_service.list_users()
+        users = service.list_users()
 
         return jsonify(
             [
@@ -156,6 +162,10 @@ def list_users():
             }
         ), 403
 
+    finally:
+        if conn:
+            conn.close()
+
 
 # =====================================================
 # POST /api/users
@@ -171,15 +181,15 @@ def create_user():
     Create a new user account.
     """
 
-    try:
+    service, conn = _build_user_service()
 
-        _require_service()
+    try:
 
         _require_administrator()
 
         data = request.get_json() or {}
 
-        user = user_service.create_user(
+        user = service.create_user(
             username=data.get("username"),
             password=data.get("password"),
             system_role_id=data.get("system_role_id"),
@@ -223,6 +233,10 @@ def create_user():
             }
         ), 403
 
+    finally:
+        if conn:
+            conn.close()
+
 
 # =====================================================
 # PATCH /api/users/<userid>
@@ -239,9 +253,9 @@ def update_user(userid):
     or credentials.
     """
 
-    try:
+    service, conn = _build_user_service()
 
-        _require_service()
+    try:
 
         _require_administrator()
 
@@ -249,14 +263,14 @@ def update_user(userid):
 
         if "system_role_id" in data:
 
-            user = user_service.change_role(
+            user = service.change_role(
                 userid,
                 data["system_role_id"]
             )
 
         elif "password_hash" in data:
 
-            user = user_service.reset_password(
+            user = service.reset_password(
                 userid,
                 data["password_hash"]
             )
@@ -266,7 +280,7 @@ def update_user(userid):
             data["active"] is False
         ):
 
-            user = user_service.deactivate_user(
+            user = service.deactivate_user(
                 userid
             )
 
@@ -329,3 +343,7 @@ def update_user(userid):
                 }
             }
         ), 403
+
+    finally:
+        if conn:
+            conn.close()

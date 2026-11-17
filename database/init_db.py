@@ -104,6 +104,14 @@ REFERENCES Employees(employee_id)
 """)
 
 cursor.execute("""
+CREATE TABLE IF NOT EXISTS Workdays(
+    workday_id INTEGER PRIMARY KEY,
+    day_name TEXT NOT NULL UNIQUE,
+    active INTEGER NOT NULL DEFAULT 1
+)
+""")
+
+cursor.execute("""
 CREATE TABLE IF NOT EXISTS Shifts(
     shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
     shift_name TEXT NOT NULL,
@@ -135,10 +143,14 @@ CREATE TABLE IF NOT EXISTS Forecasts(
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS StaffingRequirements(
     requirement_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workday_id INTEGER NOT NULL,
     shift_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
     required_count INTEGER NOT NULL,
-            
+
+    FOREIGN KEY (workday_id)
+        REFERENCES Workdays(workday_id)
+
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id),
         
@@ -187,7 +199,7 @@ cursor.execute("""
         employee_id INTEGER NOT NULL,
         shift_id INTEGER NOT NULL,
         availability INTEGER NOT NULL DEFAULT 1,
-        
+
         CONSTRAINT fk_employee_id
             FOREIGN KEY (employee_id)
             REFERENCES Employees(employee_id),
@@ -211,6 +223,23 @@ cursor.executemany(
         (1, 'Associate', 'Regular employee with limited access'),
         (2, 'Manager', 'Manager with view of Employees and ability to make schedules'),
         (3, 'Administrator', 'Administrator with full access')
+    ]
+)
+
+# Create Workdays, keep for final version
+cursor.executemany(
+    """
+    INSERT INTO Workdays (workday_id, day_name, active)
+    VALUES (?, ?, ?)
+    """,
+    [
+        (0, 'Monday', 1),
+        (1, 'Tuesday', 1),
+        (2, 'Wednesday', 1),
+        (3, 'Thursday', 1),
+        (4, 'Friday', 1),
+        (5, 'Saturday', 1),
+        (6, 'Sunday', 1)
     ]
 )
 
@@ -279,9 +308,9 @@ cursor.executemany(
     VALUES (?, ?, ?)
     """,
     [
-        ('Morning Shift', '2026-11-10T08:00:00', '2026-11-10T12:00:00'),
-        ('Afternoon Shift', '2026-11-10T12:00:00', '2026-11-10T16:00:00'),
-        ('Evening Shift', '2026-11-10T16:00:00', '2026-11-10T20:00:00'),
+        ('Morning Shift', '08:00', '12:00'),
+        ('Afternoon Shift', '12:00', '16:00'),
+        ('Evening Shift', '16:00', '20:00'),
     ],
 )
 
