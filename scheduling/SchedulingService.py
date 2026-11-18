@@ -283,10 +283,19 @@ class SchedulingService:
 
             candidate_employees = employees
 
-            # TODO: AvailabilityService is not implemented.
-            #       Needs refactoring to align with SDS.
-                        
-            
+            # Emplyee Availability Filter
+            # if self.availability_service:
+
+            #     candidate_employees = [
+            #         employee
+            #         for employee in candidate_employees
+            #         if self.availability_service.is_employee_available(
+            #             employee["employee_id"],
+            #             schedule_date,
+            #             requirement["shift_id"]
+            #         )
+            #     ]
+
             # Weekly hour limit filter
             candidate_employees = [
                 employee

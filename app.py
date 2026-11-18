@@ -8,7 +8,7 @@ from authentication.AuthRoutes import auth_bp
 from availability.AvailabilityRoutes import availability_bp
 from forecasting.ForecastRoutes import forecasting_bp
 from scheduling.SchedulingRoutes import scheduling_bp
-from ai_assistant.AssistantRoutes import ai_bp
+from assistant.AssistantRoutes import ai_bp
 
 from user_management.User import User
 from user_management.UserRoutes import user_bp
@@ -16,7 +16,6 @@ from user_management.UserService import UserService
 from user_management.UserRepository import UserRepository
 
 from forecasting.ForecastService import ForecastService
-from ai_assistant.AssistantService import AssistantService
 
 
 app = Flask(__name__)

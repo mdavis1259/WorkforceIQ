@@ -270,7 +270,6 @@ def schedule():
             if schedule:
 
                 assignments = service.get_assignments(schedule["schedule_id"])
-
         return render_template("schedule.html", schedule=schedule, assignments=assignments)
     
     finally:

@@ -762,6 +762,7 @@ class SchedulingTests(unittest.TestCase):
             0
         )
 
+    # TODO: remove this skip
     @unittest.skip("Availability service not implemented yet")
     def test_generate_week_skips_unavailable_employee(self):
 
