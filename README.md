@@ -50,7 +50,7 @@ The Alpha Release demonstrates:
 - Staffing requirements management
 - Automated schedule generation
 - Labor cost analysis
-- AI-assisted workforce questions
+- AI Assistant for shift availability and qualification questions
 - Automated testing
 - GitHub Actions CI/CD integration
 
@@ -65,6 +65,7 @@ Python 3.11 or later.
 ## Ollama
 
 The AI Assistant requires Ollama and the Llama 3.2 model.
+If Ollama is not running, the assistant falls back to a simpler keyword parser and still answers supported questions.
 
 Install Ollama:
 
@@ -261,17 +262,33 @@ This helps evaluate whether generated schedules align with planned labor spendin
 
 ## 7. Use the AI Assistant
 
-The AI Assistant can answer workforce-related questions using application data.
+Open **AI Assistant** in the navigation bar. It is available to Managers and Administrators and is read-only: it never changes data.
 
-Example questions:
+### Questions the assistant can answer in this Alpha
 
-- How many employees are there?
-- List all employees.
-- What is each employee's hourly rate?
-- What is the average employee wage?
-- Which employee has the highest wage?
+| Question type | Example | What you get |
+|---|---|---|
+| Who is available for a shift | "Who is available to cover the Friday evening shift?" | Employees marked available for that shift, with their role |
+| Who is qualified | "Who is qualified as an associate?" or "Who is qualified for the evening shift on Friday?" | Employees with that role or qualification (and available, if a shift is named) |
 
-The AI Assistant uses Ollama and Llama 3.2 running locally.
+Tips for good questions:
+
+- Name the day: a weekday (Friday), `today`, `tomorrow`, or a date like `2026-11-20`.
+- Name the shift: the morning, afternoon, or evening shift.
+- Optionally name a role or qualification, such as Associate or First Aid / CPR.
+- Questions must be 3 to 500 characters.
+
+If the question is missing a detail, the assistant asks for it (for example, "Which day do you mean?"). If it is not one of the supported types, it lists the supported types.
+
+### Not available in this Alpha
+
+- **Budget questions** (for example, "Is next week within budget?"). The assistant replies that the budget check is not available yet. Connecting it to the Scheduling and labor cost data is planned after the Alpha.
+- Questions about wages or hourly rates. Wages are never sent to the AI model or shown in its answers.
+- Changing schedules or employee records.
+
+### How it works
+
+Llama 3.2 (through Ollama) only works out what the manager is asking. The answer itself always comes from the database and is re-checked against availability and qualification rules. If Ollama is not running or returns unusable output, a keyword parser answers the question and the page shows a notice that the AI model was not available.
 
 ---
 
@@ -317,9 +334,12 @@ The AI Assistant uses Ollama and Llama 3.2 running locally.
 
 ## AI Assistant
 
-- Workforce-related questions
-- Local LLM integration
-- Workforce data context
+- Answers availability and qualification questions for a shift
+- Pipeline: intent parsing, query planning, rule validation, response building
+- Local Llama 3.2 through Ollama, with a keyword-parser fallback
+- Read-only and manager-only; no employee records or wages are sent to the model
+- Budget questions are not connected yet (see Known Limitations)
+- Endpoints: `POST /api/assistant/query` and `GET /api/assistant/health`
 
 ---
 
@@ -334,6 +354,8 @@ Current limitations include:
 - Limited reporting functionality
 - Limited schedule optimization rules
 - Ongoing SDS feature implementation
+- AI Assistant budget questions are not connected to scheduling data yet
+- AI Assistant availability matches the weekly shift pattern, not individual dates
 
 ---
 
@@ -347,7 +369,7 @@ Current focus areas include:
 - Schedule optimization
 - Reporting features
 - Administrative workflows
-- Expanded AI capabilities
+- Expanded AI capabilities, starting with budget questions
 - SDS compliance enhancements
 
 ---
