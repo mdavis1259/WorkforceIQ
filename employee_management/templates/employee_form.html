@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include "_employee_styles.html" %}
+<div class="dashboard">
+
+    <h1>{% if employee %}Edit Employee{% else %}Add Employee{% endif %}</h1>
+
+    <div class="page-card emp-form">
+
+        {% if field_errors %}
+        <div class="error-message">
+            <strong>Please fix the following:</strong>
+            <ul>
+                {% for field, issues in field_errors.items() %}
+                    {% for issue in issues %}
+                    <li>{{ issue }}</li>
+                    {% endfor %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <form
+            method="POST"
+            action="{% if employee %}{{ url_for('employee.edit_employee', employee_id=employee.employee_id) }}{% else %}{{ url_for('employee.new_employee') }}{% endif %}"
+        >
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="emp-row">
+                <div class="form-group">
+                    <label for="first_name">First name</label>
+                    <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        maxlength="50"
+                        value="{{ values.first_name or '' }}"
+                        class="{% if 'first_name' in field_errors %}emp-invalid{% endif %}"
+                        required
+                    >
+                </div>
+                <div class="form-group">
+                    <label for="last_name">Last name</label>
+                    <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        maxlength="50"
+                        value="{{ values.last_name or '' }}"
+                        class="{% if 'last_name' in field_errors %}emp-invalid{% endif %}"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="role_id">Job role</label>
+                <select
+                    id="role_id"
+                    name="role_id"
+                    class="{% if 'role_id' in field_errors %}emp-invalid{% endif %}"
+                    required
+                >
+                    <option value="" disabled {% if not values.role_id %}selected{% endif %}>Select a job role</option>
+                    {% for role in roles %}
+                    <option
+                        value="{{ role.role_id }}"
+                        {% if values.role_id|string == role.role_id|string %}selected{% endif %}
+                    >{{ role.role_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {% if can_edit_rate %}
+            <div class="form-group">
+                <label for="hourly_rate">Hourly rate ($)</label>
+                <input
+                    type="number"
+                    id="hourly_rate"
+                    name="hourly_rate"
+                    step="0.01"
+                    min="0.01"
+                    max="500"
+                    value="{{ values.hourly_rate if values.hourly_rate is not none else '' }}"
+                    class="{% if 'hourly_rate' in field_errors %}emp-invalid{% endif %}"
+                    required
+                >
+                <div class="emp-hint">Greater than 0 and at most 500.</div>
+            </div>
+            {% else %}
+            <div class="form-group">
+                <label>Hourly rate</label>
+                <div class="emp-hint">Hidden for your account. It will stay unchanged.</div>
+            </div>
+            {% endif %}
+
+            <div class="emp-row">
+                <div class="form-group">
+                    <label for="max_hours_per_week">Max hours per week</label>
+                    <input
+                        type="number"
+                        id="max_hours_per_week"
+                        name="max_hours_per_week"
+                        min="1"
+                        max="80"
+                        value="{{ values.max_hours_per_week if values.max_hours_per_week is not none else '' }}"
+                        class="{% if 'max_hours_per_week' in field_errors %}emp-invalid{% endif %}"
+                    >
+                </div>
+                <div class="form-group">
+                    <label for="preferred_hours_per_week">Preferred hours per week</label>
+                    <input
+                        type="number"
+                        id="preferred_hours_per_week"
+                        name="preferred_hours_per_week"
+                        min="0"
+                        max="80"
+                        value="{{ values.preferred_hours_per_week if values.preferred_hours_per_week is not none else '' }}"
+                        class="{% if 'preferred_hours_per_week' in field_errors %}emp-invalid{% endif %}"
+                    >
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Qualifications</label>
+                <div class="emp-checks">
+                    {% for qualification in qualifications %}
+                    <label>
+                        <input
+                            type="checkbox"
+                            name="qualification_ids"
+                            value="{{ qualification.qualification_id }}"
+                            {% if qualification.qualification_id|string in selected_qualifications %}checked{% endif %}
+                        >
+                        {{ qualification.qualification_name }}
+                    </label>
+                    {% else %}
+                    <span class="emp-hint">No qualifications exist yet.</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="emp-actions">
+                <button type="submit" class="emp-btn emp-btn-primary">
+                    {% if employee %}Save Changes{% else %}Add Employee{% endif %}
+                </button>
+                <a
+                    class="emp-btn"
+                    href="{% if employee %}{{ url_for('employee.employee_detail', employee_id=employee.employee_id) }}{% else %}{{ url_for('employee.employees') }}{% endif %}"
+                >Cancel</a>
+            </div>
+        </form>
+
+    </div>
+</div>
+{% endblock %}
