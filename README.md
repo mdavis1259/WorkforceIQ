@@ -1,8 +1,12 @@
 # WorkforceIQ
 
-WorkforceIQ is an AI-assisted workforce planning and scheduling platform being developed as part of the CMSC 495 Computer Science Capstone course.
+WorkforceIQ is an AI-assisted workforce planning and scheduling platform developed as part of the CMSC 495 Computer Science Capstone course.
 
-## Team
+The WorkforceIQ Alpha Release demonstrates integrated workforce forecasting, scheduling, employee management, user administration, and AI-assisted workforce analysis through a unified web application.
+
+---
+
+# Team
 
 - Merrill Davis
 - Stephen Douba
@@ -10,42 +14,61 @@ WorkforceIQ is an AI-assisted workforce planning and scheduling platform being d
 
 ---
 
-## Repository Workflow
+# Repository Workflow
 
-To help protect the repository while the team begins development, I have proposed the following workflow:
+The WorkforceIQ team uses a collaborative Git workflow designed to maintain code quality and project stability.
 
-- Changes should be developed on feature branches rather than directly on `main`.
-- Completed work should be submitted through a Pull Request (PR).
-- Pull Requests should ideally be reviewed by at least one other team member before merging.
-- Force pushes to the `main` branch should be avoided.
+## Development Process
 
-Please note that these are currently proposed team practices rather than enforced GitHub policies. The repository is hosted under a personal GitHub account, and some branch protection features require a higher-tier GitHub plan to enforce automatically.
+- Create feature branches for all development work.
+- Submit completed work through Pull Requests (PRs).
+- Review code prior to merging whenever possible.
+- Avoid direct development on the `main` branch.
+- Avoid force pushes to shared branches.
 
-**These workflow rules are intended as placeholders and should be reviewed by the team.** As WorkforceIQ evolves, the team may decide to modify, simplify, or expand these practices based on project needs and team consensus.
+Example workflow:
 
-## Current Repository
-
-This repository currently contains a proof of concept demonstrating:
-
-- Flask web application
-- Employee management prototype
-- Demand forecasting prototype
-- AI assistant integration using Ollama and Llama 3.2
-- SQLite database
+```bash
+git checkout -b feature-branch
+git add .
+git commit -m "Implement feature"
+git push -u origin feature-branch
+```
 
 ---
 
-## Requirements
+# Alpha Release Overview
 
-### Python
+The Alpha Release demonstrates:
 
-Python 3.11 or later
+- Authentication and user login
+- Employee management
+- User management
+- Employee availability management
+- Demand forecasting
+- Labor budget forecasting
+- Staffing requirements management
+- Automated schedule generation
+- Labor cost analysis
+- AI-assisted workforce questions
+- Automated testing
+- GitHub Actions CI/CD integration
 
-### Ollama
+---
+
+# Requirements
+
+## Python
+
+Python 3.11 or later.
+
+## Ollama
+
+The AI Assistant requires Ollama and the Llama 3.2 model.
 
 Install Ollama:
 
-https://ollama.com
+<https://ollama.com>
 
 Pull the model:
 
@@ -59,7 +82,7 @@ Verify installation:
 ollama list
 ```
 
-You should see:
+Expected output:
 
 ```text
 llama3.2
@@ -67,7 +90,7 @@ llama3.2
 
 ---
 
-## Quick Start
+# Installation
 
 Clone the repository:
 
@@ -88,13 +111,13 @@ Initialize the database:
 python database/init_db.py
 ```
 
-Run the application:
+Start the application:
 
 ```bash
 python app.py
 ```
 
-Open your browser and navigate to:
+Open:
 
 ```text
 http://localhost:5000
@@ -102,109 +125,235 @@ http://localhost:5000
 
 ---
 
-## Current Modules
+# Running Tests
 
-### Authentication
+Run the full test suite:
 
-The application currently supports user login using credentials stored in a local SQLite database.
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+```
 
-Future enhancements may include:
+Run Forecasting tests:
 
-- User registration
-- Password hashing
-- Role-based permissions
-- Session management
+```bash
+python -m unittest forecasting.ForecastTests -v
+```
+
+Run Scheduling tests:
+
+```bash
+python -m unittest scheduling.SchedulingTests -v
+```
+
+Run User Management tests:
+
+```bash
+python -m unittest user_management.UserTests -v
+```
 
 ---
 
-### Employee Module
+# Continuous Integration
 
-The Employee Module currently displays a list of employees and provides functionality to add employees.
+WorkforceIQ uses GitHub Actions for Continuous Integration.
 
-Planned enhancements include:
+The CI/CD pipeline automatically:
 
-- Full CRUD operations
+- Installs project dependencies
+- Initializes the application database
+- Executes automated tests
+- Validates pull requests prior to merge
+
+All code intended for release should successfully pass the CI/CD pipeline.
+
+---
+
+# Application Workflow
+> **Important:** WorkforceIQ follows a forecast-driven scheduling process.
+> Staffing Requirements should be configured first, followed by Forecast generation and Forecast approval.
+> Schedules should only be generated after a forecast has been reviewed and approved by a Manager.
+
+
+The WorkforceIQ Alpha Release is intended to be used in the following order.
+
+## 1. Login
+
+Log in using a Manager or Administrator account.
+
+---
+
+## 2. Configure Staffing Requirements
+
+Define staffing requirements based on:
+
+- Workday
+- Shift
+- Role
+- Required staffing levels
+
+These requirements serve as the basis for schedule generation.
+
+---
+
+## 3. Generate Forecasts
+
+Navigate to the Forecasting module and generate a draft forecast.
+
+Forecasts provide:
+
+- Projected sales
+- Forecast high and low ranges
+- Labor budget estimates
+
+---
+
+## 4. Review and Approve Forecasts
+
+**Forecast approval is a required step before schedule generation.**
+
+After generating a forecast, managers should review:
+
+- Projected sales
+- Forecast ranges
+- Labor budget estimates
+
+If necessary, forecast values may be adjusted prior to approval.
+
+Only approved forecasts should be used for schedule generation. The Scheduling module relies on approved forecast data when evaluating labor budgets and labor variance reporting.
+
+**WorkforceIQ operational workflow:**
+
+1. Configure Staffing Requirements
+2. Generate Draft Forecast
+3. Review Forecast
+4. Approve Forecast
+5. Generate Schedule
+6. Review Labor Analysis
+
+
+---
+
+## 5. Generate Weekly Schedules
+
+After forecasts are approved, generate a weekly schedule.
+
+The scheduling engine evaluates:
+
+- Staffing requirements
 - Employee qualifications
 - Employee availability
-- Time-off requests
-- Employee search and filtering
+- Weekly hour limits
+- Shift conflicts
 
 ---
 
-### Forecasting Module
+## 6. Review Labor Analysis
 
-The Forecasting Module currently demonstrates a simple scikit-learn forecasting model using sample data included in `app.py`.
+After schedule generation, managers can review:
 
-The proof of concept forecasts:
+- Scheduled labor cost
+- Forecasted labor budget
+- Labor variance analysis
 
-- Projected demand
-- Recommended staffing levels
-
-Future enhancements may include:
-
-- Historical sales imports
-- Labor percentage goals
-- Labor cost forecasting
-- Multi-week forecasting
+This helps evaluate whether generated schedules align with planned labor spending.
 
 ---
 
-### Reports Module
+## 7. Use the AI Assistant
 
-Placeholder for future reporting functionality.
-
-Potential reports include:
-
-- Labor cost analysis
-- Staffing utilization
-- Forecast accuracy
-- Schedule compliance
-
----
-
-### AI Assistant Module
-
-The AI Assistant currently integrates with the local Ollama-hosted Llama 3.2 model.
-
-The assistant uses data from the Employees table as context when generating responses.
+The AI Assistant can answer workforce-related questions using application data.
 
 Example questions:
 
 - How many employees are there?
 - List all employees.
-- What is each employee's wage?
+- What is each employee's hourly rate?
 - What is the average employee wage?
 - Which employee has the highest wage?
 
-The purpose of this feature is to demonstrate how WorkforceIQ may use AI to answer workforce-related questions using application data.
+The AI Assistant uses Ollama and Llama 3.2 running locally.
 
 ---
 
-## Project Status
+# Current Modules
 
-This repository contains a working proof of concept intended to demonstrate the core ideas behind WorkforceIQ.
+## Authentication
+
+- Login
+- Session management
+- Role-based access
+
+## Employee Management
+
+- Employee profiles
+- Employee management
+- Employee search
+
+## User Management
+
+- User account management
+- Role assignment
+- Password reset workflow
+- Account activation and deactivation
+
+## Availability Management
+
+- Employee availability tracking
+- Scheduling support
+
+## Forecasting
+
+- Historical demand analysis
+- 14-day forecasting
+- Labor budget forecasting
+- Draft and Approved forecast workflow
+
+## Scheduling
+
+- Staffing requirements management
+- Schedule generation
+- Assignment management
+- Labor cost analysis
+
+## AI Assistant
+
+- Workforce-related questions
+- Local LLM integration
+- Workforce data context
+
+---
+
+# Known Limitations
+
+This Alpha Release is intended for demonstration and evaluation purposes.
+
+Current limitations include:
+
+- SQLite development database
+- Basic forecasting model
+- Limited reporting functionality
+- Limited schedule optimization rules
+- Ongoing SDS feature implementation
+
+---
+
+# Project Status
+
+WorkforceIQ is currently in the Alpha Release phase.
 
 Current focus areas include:
 
-- Authentication
-- Employee management
-- AI-assisted workforce questions
-- Forecasting concepts
-- Application usability
-
-The architecture, database schema, and repository organization will evolve as the team progresses through the capstone project.
+- Forecast refinement
+- Schedule optimization
+- Reporting features
+- Administrative workflows
+- Expanded AI capabilities
+- SDS compliance enhancements
 
 ---
 
-## Notes
+# Educational Use Notice
 
-This project is an educational prototype and does not currently use real employee data, payroll systems, or production forecasting models.
+WorkforceIQ is an educational software project developed for the CMSC 495 Computer Science Capstone course.
 
-Team members are encouraged to:
-
-- Explore the code
-- Test existing features
-- Suggest improvements
-- Discuss architecture and implementation ideas
-
-As development progresses, the repository will evolve from a proof of concept into the full WorkforceIQ application.
+The application is intended for academic and demonstration purposes and is not currently intended for production workforce management operations.
