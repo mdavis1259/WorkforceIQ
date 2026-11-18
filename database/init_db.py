@@ -485,19 +485,36 @@ for (
 
 cursor.executemany(
     """
+    INSERT INTO Shifts (
+        shift_id,
+        shift_name,
+        start_time,
+        end_time
+    )
+    VALUES (?, ?, ?, ?)
+    """,
+    [
+        (4, "Availability 1", "2026-11-17T08:00:00Z", "2026-11-17T12:00:00Z"),
+        (5, "Availability 2", "2026-11-17T13:00:00Z", "2026-11-17T17:00:00Z"),
+        (6, "Availability 3", "2026-11-17T18:00:00Z", "2026-11-17T22:00:00Z")
+    ]
+)
+
+cursor.executemany(
+    """
     INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
     VALUES (?, ?, ?)
     """,
     [
-        (1, 1, 1),
-        (1, 2, 0),
-        (1, 3, 1),
-        (2, 1, 1),
-        (2, 2, 1),
-        (2, 3, 0),
-        (3, 1, 0),
-        (3, 2, 1),
-        (3, 3, 1),
+        (1, 4, 1),
+        (1, 5, 0),
+        (1, 6, 1),
+        (2, 4, 1),
+        (2, 5, 1),
+        (2, 6, 0),
+        (9, 4, 0),
+        (9, 5, 1),
+        (9, 6, 1),
     ],
 )
 conn.commit()
