@@ -44,6 +44,12 @@ class MockForecastRepository:
     def clear_forecasts(self):
         self.saved_forecasts = []
 
+    def get_forecast_by_date(self, forecast_date):
+        return None
+
+    def get_forecasts_from_date(self, start_date):
+        return self.saved_forecasts
+
     def save_forecast(
             self,
             forecast_date,

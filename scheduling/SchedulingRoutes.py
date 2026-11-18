@@ -229,11 +229,7 @@ def generate_schedule():
 
         schedule, summary = service.generate_week(week_start)
 
-        print(summary)
-
         assignments = service.get_assignments(schedule["schedule_id"])
-        
-        print(assignments)
 
         return render_template(
             "schedule.html", 

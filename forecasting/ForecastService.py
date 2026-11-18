@@ -21,6 +21,12 @@ class ForecastService:
 
             base_date = date.today()
 
+        if hasattr(self.repository, "get_forecast_by_date"):
+            existing_forecast = self.repository.get_forecast_by_date(base_date.isoformat())
+
+            if existing_forecast:
+                return self.repository.get_forecasts_from_date(base_date.isoformat())
+
         history = self.repository.get_demand_history()
 
         if len(history) < 7:
@@ -86,6 +92,9 @@ class ForecastService:
                 "status": "Draft"
             })
 
+        if hasattr(self.repository, "get_forecasts_from_date"):
+            return self.repository.get_forecasts_from_date(base_date.isoformat())
+        
         return forecasts
 
     def generate_draft_forecast(self, labor_percent=18.0, uncertainty=1.0):
