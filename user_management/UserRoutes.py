@@ -120,27 +120,6 @@ def users():
         if conn:
             conn.close()
 
-@user_bp.route("/users")
-@login_required
-def users():
-    
-    service, conn = _build_user_service()
-
-    try:
-
-        _require_administrator
-
-        users = service.list_users()
-
-        return render_template(
-            "users.html",
-            users=users
-        )
-
-    finally:
-        if conn:
-            conn.close()
-
 # =====================================================
 # GET /api/users
 # =====================================================
