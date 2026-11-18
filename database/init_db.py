@@ -149,8 +149,7 @@ CREATE TABLE IF NOT EXISTS StaffingRequirements(
     workday_id INTEGER NOT NULL,
     shift_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
-    required_count INTEGER NOT NULL,
-            
+    required_count INTEGER NOT NULL,          
 
     FOREIGN KEY (workday_id)
         REFERENCES Workdays(workday_id)
