@@ -101,7 +101,8 @@ class WorkforceIQTestCase(unittest.TestCase):
                 projected_sales_low REAL NOT NULL,
                 projected_sales_high REAL NOT NULL,
                 required_labor_hours REAL,
-                labor_budget REAL NOT NULL
+                labor_budget REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Draft'
             );
 
             CREATE TABLE Shifts(
@@ -248,7 +249,7 @@ class WorkforceIQTestCase(unittest.TestCase):
             repository = ForecastRepository(connection)
             service = ForecastService(repository)
 
-            forecasts = service.generate_two_week_forecast()
+            forecasts = service.generate_draft_forecast()
 
             self.assertEqual(len(forecasts), 14)
 

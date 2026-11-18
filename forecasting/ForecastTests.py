@@ -44,6 +44,12 @@ class MockForecastRepository:
     def clear_forecasts(self):
         self.saved_forecasts = []
 
+    def get_forecast_by_date(self, forecast_date):
+        return None
+
+    def get_forecasts_from_date(self, start_date):
+        return self.saved_forecasts
+
     def save_forecast(
             self,
             forecast_date,
@@ -52,6 +58,7 @@ class MockForecastRepository:
             projected_sales_high,
             required_labor_hours,
             labor_budget,
+            status="Draft"
     ):
         self.saved_forecasts.append({
             "forecast_date": forecast_date,
@@ -59,6 +66,7 @@ class MockForecastRepository:
             "projected_sales_low": projected_sales_low,
             "projected_sales_high": projected_sales_high,
             "labor_budget": labor_budget,
+            "status": "Draft"
         })
 
 
@@ -74,7 +82,7 @@ class ForecastServiceTests(unittest.TestCase):
         exactly 14 forecast records.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertEqual(len(forecasts), 14)
 
@@ -84,7 +92,7 @@ class ForecastServiceTests(unittest.TestCase):
         a forecast date.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertIn(
             "forecast_date",
@@ -97,7 +105,7 @@ class ForecastServiceTests(unittest.TestCase):
         projected sales.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertIn(
             "projected_sales",
@@ -110,7 +118,7 @@ class ForecastServiceTests(unittest.TestCase):
         upper and lower uncertainty bounds.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertIn(
             "projected_sales_low",
@@ -128,7 +136,7 @@ class ForecastServiceTests(unittest.TestCase):
         less than projected sales.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertLess(
             forecasts[0]["projected_sales_low"],
@@ -141,7 +149,7 @@ class ForecastServiceTests(unittest.TestCase):
         greater than projected sales.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertGreater(
             forecasts[0]["projected_sales_high"],
@@ -154,7 +162,7 @@ class ForecastServiceTests(unittest.TestCase):
         projected labor budget.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertIn(
             "labor_budget",
@@ -167,7 +175,7 @@ class ForecastServiceTests(unittest.TestCase):
         be greater than zero.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         self.assertGreater(
             forecasts[0]["labor_budget"],
@@ -180,7 +188,7 @@ class ForecastServiceTests(unittest.TestCase):
         contain the expected fields.
         """
 
-        forecasts = self.service.generate_two_week_forecast()
+        forecasts = self.service.generate_draft_forecast()
 
         required_fields = {
             "forecast_date",
@@ -228,6 +236,7 @@ class ForecastServiceTests(unittest.TestCase):
                 projected_sales_high,
                 required_labor_hours,
                 labor_budget,
+                status="Draft"
             ):
                 self.saved.append(
                     forecast_date
@@ -237,7 +246,7 @@ class ForecastServiceTests(unittest.TestCase):
 
         service = ForecastService(repository)
 
-        service.generate_two_week_forecast()
+        service.generate_draft_forecast()
 
         self.assertEqual(
             len(repository.saved),

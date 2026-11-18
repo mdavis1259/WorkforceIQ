@@ -17,6 +17,18 @@ from scheduling.SchedulingService import (
 
 from shared.exceptions import ValidationError
 
+class MockAvailabilityService:
+
+    def __init__(self, available):
+        self.available = available
+
+    def is_employee_available(
+        self, 
+        employee_id, 
+        schedule_date, 
+        shift_id
+    ):
+        return self.available
 
 class SchedulingTests(unittest.TestCase):
 
@@ -75,7 +87,10 @@ class SchedulingTests(unittest.TestCase):
                 role_id INTEGER NOT NULL,
                 first_name TEXT NOT NULL,
                 last_name TEXT NOT NULL,
-                hourly_rate REAL NOT NULL
+                hourly_rate REAL NOT NULL,
+                max_hours_per_week INTEGER NOT NULL DEFAULT 40,
+                preferred_hours_per_week INTEGER NOT NULL DEFAULT 32,
+                active INTEGER NOT NULL DEFAULT 1
             );
 
             CREATE TABLE Users(
@@ -105,6 +120,24 @@ class SchedulingTests(unittest.TestCase):
                 shift_id INTEGER NOT NULL,
                 role_id INTEGER NOT NULL,
                 required_count INTEGER NOT NULL
+            );
+
+            CREATE TABLE Schedules(
+                schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                week_start TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Draft'
+            );
+
+            CREATE TABLE ShiftAssignments(
+                assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                schedule_id INTEGER NOT NULL,
+                employee_id INTEGER NOT NULL,
+                role_id INTEGER NOT NULL,
+                shift_id INTEGER NOT NULL,
+
+                schedule_date TEXT NOT NULL,
+                hours REAL NOT NULL
             );
             """
         )
@@ -137,10 +170,10 @@ class SchedulingTests(unittest.TestCase):
         conn.executemany(
             """
             INSERT INTO Employees
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
-                (101, 1, "April", "Example", 20.0)
+                (101, 1, "April", "Example", 20.0, 40, 32, 1)
             ]
         )
 
@@ -182,7 +215,7 @@ class SchedulingTests(unittest.TestCase):
         conn.commit()
         conn.close()
 
-    def get_service(self):
+    def get_service(self, availability_service=None):
 
         conn = sqlite3.connect(
             self.database_path
@@ -194,8 +227,10 @@ class SchedulingTests(unittest.TestCase):
             conn
         )
 
+        forecasting_service = None
+
         service = SchedulingService(
-            repository
+            repository, availability_service, forecasting_service
         )
 
         return service, conn
@@ -381,7 +416,6 @@ class SchedulingTests(unittest.TestCase):
 
             service.update_staffing_requirement(
                 1,
-                1,
                 6
             )
 
@@ -413,7 +447,6 @@ class SchedulingTests(unittest.TestCase):
             )
 
             service.delete_staffing_requirement(
-                1,
                 1
             )
 
@@ -500,6 +533,419 @@ class SchedulingTests(unittest.TestCase):
             [(0,)]
         )
 
+    def test_create_schedule_persists_record(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            service.create_schedule("2026-11-09")
+
+        finally:
+            conn.close()
+
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT week_start
+                FROM Schedules
+                """
+            ),
+            [("2026-11-09",)]
+        )
+
+    def test_get_schedule_returns_schedule(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            service.create_schedule("2026-11-09")
+
+            schedule = service.get_schedule("2026-11-09")
+        
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(schedule)
+
+        self.assertEqual(schedule["week_start"], "2026-11-09")
+    
+    def test_create_assignment_persists_record(self):
+        
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.create_schedule("2026-11-09")
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+        
+        finally:
+            conn.close()
+
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT employee_id
+                FROM ShiftAssignments
+                """
+            ),
+            [(101,)]
+        )
+
+    def test_get_assignments_returns_rows(self):
+        
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.create_schedule("2026-11-09")
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+
+            assignments = service.get_assignments(schedule["schedule_id"])
+        
+        finally:
+            conn.close()
+        
+        self.assertEqual(len(assignments), 1)
+
+        self.assertEqual(assignments[0]["employee_id"], 101)
+
+    def test_generate_week_creates_schedule(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            schedule, _ = service.generate_week("2026-11-09")
+
+        finally:
+            conn.close()
+
+        self.assertIsNotNone(schedule)
+
+        self.assertEqual(schedule["week_start"], "2026-11-09")
+
+        self.assertEqual(
+            self.read_rows(
+                """
+                SELECT COUNT(*)
+                FROM Schedules
+                """
+            ),
+            [(1,)]
+        )
+
+    def test_generate_week_creates_assignments(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            service.create_staffing_requirement(
+                1,
+                1,
+                1,
+                2
+            )
+
+            schedule, _ = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            1
+        )
+
+    def test_generate_week_assigns_employee_by_role(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            # Associate staffing requirement
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate Role
+                1
+            )
+
+            schedule, _ = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            1
+        )
+
+        # Verify assigned employee is the Associate
+        self.assertEqual(
+            assignments[0]["employee_id"],
+            101
+        )
+
+        self.assertEqual(
+            assignments[0]["role_id"],
+            1
+        )
+
+    def test_generate_week_skips_role_with_no_qualified_employee(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            # Manager role requirement
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                2,  # Manager Role
+                1
+            )
+
+            # Remove all managers
+            conn.execute("""
+                DELETE FROM Employees
+                WHERE role_id = 2
+            """)
+            conn.commit()
+
+            schedule, _ = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            0
+        )
+
+    @unittest.skip("Availability service not implemented yet")
+    def test_generate_week_skips_unavailable_employee(self):
+
+        service, conn = self.get_service(MockAvailabilityService(False))
+
+        try:
+
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate
+                1
+            )
+
+            schedule, _ = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            0
+        )
+    
+    def test_generate_week_skips_employee_exceeding_weekly_hour_limit(self):
+
+        service, conn = self.get_service(
+            MockAvailabilityService(True)
+        )
+
+        try:
+
+            schedule = service.create_schedule(
+                "2026-11-09"
+            )
+
+            # Employee already at max weekly hours
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                40
+            )
+
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate
+                1
+            )
+
+            generated_schedule, _ = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                generated_schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertEqual(
+            len(assignments),
+            1
+        )
+
+    def test_get_employee_hours_for_week(self):
+
+        service, conn = self.get_service()
+
+        try:
+
+            schedule = service.create_schedule("2026-11-09")
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-10",
+                8
+            )
+
+            hours = service.scheduling_repository.get_employee_hours_for_week(101, "2026-11-09")
+        
+        finally:
+            conn.close()
+
+        self.assertEqual(hours, 16)        
+
+    def test_generate_week_prevents_overlapping_assignments(self):
+
+        service, conn = self.get_service(
+            MockAvailabilityService(True)
+        )
+
+        try:
+
+            # Existing shift
+            service.create_staffing_requirement(
+                1,  # Monday
+                1,  # Morning Shift
+                1,  # Associate
+                1
+            )
+
+            schedule = service.create_schedule(
+                "2026-11-09"
+            )
+
+            service.create_assignment(
+                schedule["schedule_id"],
+                101,
+                1,
+                1,
+                "2026-11-09",
+                8
+            )
+
+            # Add a second overlapping shift
+            conn.execute(
+                """
+                INSERT INTO Shifts(
+                    shift_id,
+                    shift_name,
+                    start_time,
+                    end_time
+                )
+                VALUES(
+                    2,
+                    'Overlapping Shift',
+                    '12:00',
+                    '20:00'
+                )
+                """
+            )
+
+            conn.commit()
+
+            service.create_staffing_requirement(
+                1,  # Monday
+                2,  # Overlapping Shift
+                1,  # Associate
+                1
+            )
+
+            generated_schedule, _ = service.generate_week(
+                "2026-11-09"
+            )
+
+            assignments = service.get_assignments(
+                generated_schedule["schedule_id"]
+            )
+
+        finally:
+
+            conn.close()
+
+        self.assertFalse(
+            any(
+                assignment["shift_id"] == 2
+                for assignment in assignments
+            )
+        )
 
 if __name__ == "__main__":
     unittest.main()

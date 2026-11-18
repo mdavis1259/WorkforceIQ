@@ -24,6 +24,7 @@ cursor.execute("DROP TABLE IF EXISTS Users")
 cursor.execute("DROP TABLE IF EXISTS Employees")
 cursor.execute("DROP TABLE IF EXISTS Roles")
 cursor.execute("DROP TABLE IF EXISTS SystemRoles")
+cursor.execute("DROP TABLE IF EXISTS Workdays")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS SystemRoles(
@@ -137,7 +138,8 @@ CREATE TABLE IF NOT EXISTS Forecasts(
     projected_sales_low REAL NOT NULL,
     projected_sales_high REAL NOT NULL,
     required_labor_hours REAL,
-    labor_budget REAL NOT NULL
+    labor_budget REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'Draft'
 )
 """)
 
@@ -148,6 +150,7 @@ CREATE TABLE IF NOT EXISTS StaffingRequirements(
     shift_id INTEGER NOT NULL,
     role_id INTEGER NOT NULL,
     required_count INTEGER NOT NULL,
+            
 
     FOREIGN KEY (workday_id)
         REFERENCES Workdays(workday_id)
@@ -164,7 +167,7 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS Schedules(
     schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
     week_start TEXT NOT NULL,
-    status TEXT NOT NULL
+    status TEXT NOT NULL DEFAULT 'Draft'
 )
 """)
 
@@ -191,6 +194,13 @@ CREATE TABLE IF NOT EXISTS ShiftAssignments(
 
     FOREIGN KEY (shift_id)
         REFERENCES Shifts(shift_id)
+
+    UNIQUE(
+        schedule_id,
+        employee_id,
+        shift_id,
+        schedule_date
+    )
 )
 """)
 
@@ -227,23 +237,6 @@ cursor.executemany(
     ]
 )
 
-# Create Workdays, keep for final version
-cursor.executemany(
-    """
-    INSERT INTO Workdays (workday_id, day_name, active)
-    VALUES (?, ?, ?)
-    """,
-    [
-        (0, 'Monday', 1),
-        (1, 'Tuesday', 1),
-        (2, 'Wednesday', 1),
-        (3, 'Thursday', 1),
-        (4, 'Friday', 1),
-        (5, 'Saturday', 1),
-        (6, 'Sunday', 1)
-    ]
-)
-
 # Temporary roles for proof-of-concept, can be removed later
 cursor.executemany(
     """
@@ -265,7 +258,15 @@ cursor.executemany(
     """,
     [
         (1, 'April', 'Associate', 15.00),
+        (1, 'David', 'Associate', 15.50),
+        (1, 'Emma', 'Associate', 15.25),
+        (1, 'Frank', 'Associate', 16.00),
+        (1, 'Grace', 'Associate', 15.75),
+        (1, 'Henry', 'Associate', 15.50),
+
         (2, 'Bob', 'Manager', 20.00),
+        (2, 'Isabella', 'Manager', 21.00),
+
         (3, 'Charlie', 'Administrator', 25.00)
     ],
 )
@@ -298,9 +299,17 @@ cursor.executemany(
     """,
     [
         ('april', generate_password_hash('password'), 1, 1),
-        ('bob', generate_password_hash('password'), 2, 2),
-        ('admin', generate_password_hash('password'), 3, 3),
-    ],
+        ('david', generate_password_hash('password'), 1, 2),
+        ('emma', generate_password_hash('password'), 1, 3),
+        ('frank', generate_password_hash('password'), 1, 4),
+        ('grace', generate_password_hash('password'), 1, 5),
+        ('henry', generate_password_hash('password'), 1, 6),
+
+        ('bob', generate_password_hash('password'), 2, 7),
+        ('isabella', generate_password_hash('password'), 2, 8),
+
+        ('admin', generate_password_hash('password'), 3, 9)
+    ]
 )
 
 cursor.executemany(
@@ -363,6 +372,93 @@ cursor.executemany(
         ("2026-11-04", 5200),
     ],
 )
+
+cursor.executemany(
+    """
+    INSERT INTO Workdays(
+        workday_id,
+        day_name,
+        active
+    )
+    VALUES (?, ?, ?)
+    """,
+    [
+        (1, "Monday", 1),
+        (2, "Tuesday", 1),
+        (3, "Wednesday", 1),
+        (4, "Thursday", 1),
+        (5, "Friday", 1),
+        (6, "Saturday", 1),
+        (7, "Sunday", 1)
+    ]
+)
+
+staffing_requirements = [
+
+    # Monday
+    (1, 1, 1, 2),  # 2 associates morning
+    (1, 1, 2, 1),  # 1 lead morning
+    (1, 2, 1, 3),  # 3 associates evening
+    (1, 2, 2, 1),  # 1 lead evening
+
+    # Tuesday
+    (2, 1, 1, 2),
+    (2, 1, 2, 1),
+    (2, 2, 1, 3),
+    (2, 2, 2, 1),
+
+    # Wednesday
+    (3, 1, 1, 2),
+    (3, 1, 2, 1),
+    (3, 2, 1, 3),
+    (3, 2, 2, 1),
+
+    # Thursday
+    (4, 1, 1, 2),
+    (4, 1, 2, 1),
+    (4, 2, 1, 3),
+    (4, 2, 2, 1),
+
+    # Friday
+    (5, 1, 1, 3),
+    (5, 1, 2, 1),
+    (5, 2, 1, 4),
+    (5, 2, 2, 1),
+
+    # Saturday
+    (6, 1, 1, 3),
+    (6, 1, 2, 1),
+    (6, 2, 1, 4),
+    (6, 2, 2, 1),
+
+    # Sunday
+    (7, 1, 1, 2),
+    (7, 1, 2, 1),
+    (7, 2, 1, 3),
+    (7, 2, 2, 1),
+]
+
+for (
+    workday_id,
+    shift_id,
+    role_id,
+    required_count
+) in staffing_requirements:
+
+    cursor.execute("""
+        INSERT INTO StaffingRequirements (
+            workday_id,
+            shift_id,
+            role_id,
+            required_count
+        )
+        VALUES (?, ?, ?, ?)
+    """, (
+        workday_id,
+        shift_id,
+        role_id,
+        required_count
+    ))
 
 cursor.executemany(
     """

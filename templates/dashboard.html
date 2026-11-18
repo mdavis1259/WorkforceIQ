@@ -13,8 +13,10 @@
         <div class="module-card">
             <h2>{% if level == 1 %}View Schedule{% else %}Manage Schedule{% endif %}</h2>
             <p>{% if level == 1 %}View the upcoming schedule.{% else %}Create and modify the schedule.{% endif %}</p>
-        <p> UNDER CONSTRUCTION</p>
-            <button class="btn">Open Module</button>
+
+            <a href="{{ url_for('scheduling.schedule')}}">
+                <button class="btn">Open Module</button>
+            </a>
         </div>
 
         <div class="module-card">
@@ -49,7 +51,7 @@
 
             <p>
                 Create and maintain shift definitions used
-                by availability planning and scheduling. UNDER CONSTRUCTION
+                by availability planning and scheduling.
             </p>
                 <button class="btn">
                     Open Module
