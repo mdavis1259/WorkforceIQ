@@ -19,9 +19,10 @@ class User(UserMixin):
         userid,
         username,
         system_role_id,
+        force_password_reset,
         password=None,
         employee_id=None,
-        active=True
+        active=True,
     ):
         """
         Create a User account object.
@@ -71,3 +72,6 @@ class User(UserMixin):
 
         # Active Status
         self.active = bool(active)
+
+        # Force Password Reset
+        self.force_password_reset = force_password_reset

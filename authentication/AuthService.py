@@ -122,9 +122,10 @@ class AuthService:
         but delegates ownership of user accounts to
         User Management.
         """
-        return self.user_service.create_user(
+        user, _ = self.user_service.create_user(
             username=username,
-            password=password_hash,
             system_role_id=system_role_id,
-            employee_id=employee_id
+            employee_id=employee_id,
+            force_password_reset=True
         )
+        return user

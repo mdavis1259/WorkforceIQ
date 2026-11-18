@@ -46,7 +46,8 @@ class AvailabilityTests(unittest.TestCase):
                 password TEXT NOT NULL,
                 system_role_id INTEGER NOT NULL,
                 employee_id INTEGER NOT NULL,
-                active INTEGER NOT NULL DEFAULT 1
+                active INTEGER NOT NULL DEFAULT 1,
+                force_password_reset INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE Roles(
                 role_id INTEGER PRIMARY KEY,

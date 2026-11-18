@@ -19,6 +19,8 @@ Following the WorkforceIQ architecture:
 Routes must not access the database directly.
 All SQL belongs in the repository layer.
 """
+import secrets
+from werkzeug.security import generate_password_hash
 from user_management.User import User
 from shared.exceptions import (
     ValidationError,
@@ -103,68 +105,61 @@ class UserService:
     def create_user(
         self,
         username,
-        password,
         system_role_id,
-        employee_id
+        employee_id,
+        password_hash=None,
+        force_password_reset=True
     ):
         """
         Create a WorkforceIQ user account.
-
-        SDS Layer:
-            Module Layer
-
-        Args:
-            username:
-                Unique account username.
-
-            password:
-                Password hash associated with the account.
-
-            system_role_id:
-                WorkforceIQ permission level assigned to the user.
-
-            employee_id:
-                Associated employee record.
-            
-        Returns:
-            Newly-created User object.
         """
+
+
         if not username:
-            raise ValidationError("Username is required.")
-        
-        if not password:
-            raise ValidationError("Password is required.")
+            raise ValidationError(
+                "Username is required."
+            )
 
         if system_role_id not in (0, 1, 2, 3):
-            raise ValidationError("Invalid system role.")
+            raise ValidationError(
+                "Invalid system role."
+            )
 
         if employee_id is None:
-            raise ValidationError("Employee association is required.")
+            raise ValidationError(
+                "Employee association is required."
+            )
 
-            # TODO (ARCH-1):
-            # Verify employee_id exists once
-            # EmployeeService is available.
-
-        existing_user = self.get_user_by_username(username)
+        existing_user = self.get_user_by_username(
+            username
+        )
 
         if existing_user:
-            raise ValidationError("Username already exists.")
+            raise ValidationError(
+                "Username already exists."
+            )
 
+        # Temporary password.
+        # User will create their own on first login.
+        if password_hash is None:
+            temporary_password = secrets.token_urlsafe(12)
+            password_hash = generate_password_hash(temporary_password)
+        else:
+            temporary_password = None
 
-        # Build the SDS 8.7 User contract object.
-        #
-        # Services create and validate business objects before sending
-        # them to the repository layer.
         user = User(
             userid=None,
             username=username,
-            password=password,
+            password=password_hash,
             system_role_id=system_role_id,
             employee_id=employee_id,
-            active=True   
+            active=True,
+            force_password_reset=force_password_reset
         )
 
-        return self.repository.create_user(user)
+        created_user = self.repository.create_user(user)
+
+        return created_user, temporary_password
 
     def update_user(self, user):
         """
@@ -232,6 +227,17 @@ class UserService:
         # rather than accessing the Users table directly.
         return self.repository.update_role(userid, system_role_id)
 
+    def set_force_password_reset(self, userid, force_password_reset):
+        """
+        Require a user to reset their password.
+        """
+        user = self.get_user_by_id(userid)
+
+        if user is None:
+            raise NotFoundError("User not found.")
+
+        return self.repository.set_force_password_reset(userid, force_password_reset)
+
     def reset_password(self, userid, password_hash):
         """
         Reset a user's password.
@@ -258,9 +264,11 @@ class UserService:
         if user is None:
             raise NotFoundError("User not found.")
 
-        # Authentication may initiate password changes,
-        # but User Management owns modification of user account data.
-        return self.repository.reset_password(userid, password_hash)
+        updated_user = self.repository.reset_password(userid, password_hash)
+
+        self.repository.set_force_password_reset(userid, False)
+
+        return self.get_user_by_id(userid)
 
     def deactivate_user(self, userid):
         """

@@ -51,9 +51,9 @@ def load_user(user_id):
 
     try:
         user_repository = UserRepository(conn)
-        user_service = UserService(user_repository)
+        service = UserService(user_repository)
 
-        return user_service.get_user_by_id(user_id)
+        return service.get_user_by_id(user_id)
 
     finally:
         conn.close()
