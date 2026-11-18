@@ -416,7 +416,6 @@ class SchedulingTests(unittest.TestCase):
 
             service.update_staffing_requirement(
                 1,
-                1,
                 6
             )
 
@@ -448,7 +447,6 @@ class SchedulingTests(unittest.TestCase):
             )
 
             service.delete_staffing_requirement(
-                1,
                 1
             )
 

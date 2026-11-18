@@ -160,19 +160,13 @@ class SchedulingService:
 
     def update_staffing_requirement(
         self,
-        shift_id,
-        role_id,
+        requirement_id,
         required_count
     ):
 
-        if shift_id is None:
+        if requirement_id is None:
             raise ValidationError(
-                "Shift ID is required."
-            )
-
-        if role_id is None:
-            raise ValidationError(
-                "Role ID is required."
+                "Requirement ID is required."
             )
 
         if required_count is None:
@@ -186,28 +180,21 @@ class SchedulingService:
             )
 
         return self.scheduling_repository.update_staffing_requirement(
-            shift_id,
-            role_id,
+            requirement_id,
             required_count
         )
 
     def delete_staffing_requirement(
         self,
-        shift_id,
-        role_id
+        requirement_id
     ):
 
-        if shift_id is None:
+        if requirement_id is None:
             raise ValidationError(
-                "Shift ID is required."
+                "Requirement ID is required."
             )
 
-        if role_id is None:
-            raise ValidationError(
-                "Role ID is required."
-            )
-
-        self.scheduling_repository.delete_staffing_requirement(shift_id, role_id)
+        self.scheduling_repository.delete_staffing_requirement(requirement_id)
 
     # ==================================================
     # WORKDAYS
@@ -264,7 +251,10 @@ class SchedulingService:
             "employees_considered": 0,
             "employees_assigned": 0,
             "unfilled_requirements": 0,
-            "requirements": []
+            "requirements": [],
+            "daily_labor_cost": {},
+            "daily_labor_budget": {},
+            "daily_variance": {}
         }
 
         requirements = (self.scheduling_repository.get_staffing_requirement_rows())
@@ -345,6 +335,19 @@ class SchedulingService:
                     8
                 )
 
+                print(
+                    employee["first_name"],
+                    employee["hourly_rate"],
+                    schedule_date
+                )
+
+                labor_cost = employee["hourly_rate"] * 8
+
+                if schedule_date not in summary["daily_labor_cost"]:
+                    summary["daily_labor_cost"][schedule_date] = 0
+
+                summary["daily_labor_cost"][schedule_date] += labor_cost
+
                 assigned_count += 1
                 summary["employees_assigned"] += 1
 
@@ -358,6 +361,26 @@ class SchedulingService:
                 "required_count": required_count,
                 "assigned_count": assigned_count
             })
+
+            forecasts = []
+
+            if self.forecasting_service:
+                forecasts = self.forecasting_service.get_forecasts()
+
+            for forecast in forecasts:
+
+                forecast_date = forecast["forecast_date"]
+
+                if forecast_date in summary["daily_labor_cost"]:
+
+                    budget = forecast["labor_budget"]
+
+                    actual = summary["daily_labor_cost"][forecast_date]
+
+                    summary["daily_labor_budget"][forecast_date] = budget
+
+                    summary["daily_variance"][forecast_date] = round(budget - actual, 2)
+
 
         return schedule, summary
     

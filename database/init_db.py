@@ -24,6 +24,7 @@ cursor.execute("DROP TABLE IF EXISTS Users")
 cursor.execute("DROP TABLE IF EXISTS Employees")
 cursor.execute("DROP TABLE IF EXISTS Roles")
 cursor.execute("DROP TABLE IF EXISTS SystemRoles")
+cursor.execute("DROP TABLE IF EXISTS Workdays")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS SystemRoles(
@@ -273,7 +274,15 @@ cursor.executemany(
     """,
     [
         (1, 'April', 'Associate', 15.00),
+        (1, 'David', 'Associate', 15.50),
+        (1, 'Emma', 'Associate', 15.25),
+        (1, 'Frank', 'Associate', 16.00),
+        (1, 'Grace', 'Associate', 15.75),
+        (1, 'Henry', 'Associate', 15.50),
+
         (2, 'Bob', 'Manager', 20.00),
+        (2, 'Isabella', 'Manager', 21.00),
+
         (3, 'Charlie', 'Administrator', 25.00)
     ],
 )
@@ -306,9 +315,17 @@ cursor.executemany(
     """,
     [
         ('april', generate_password_hash('password'), 1, 1),
-        ('bob', generate_password_hash('password'), 2, 2),
-        ('admin', generate_password_hash('password'), 3, 3),
-    ],
+        ('david', generate_password_hash('password'), 1, 2),
+        ('emma', generate_password_hash('password'), 1, 3),
+        ('frank', generate_password_hash('password'), 1, 4),
+        ('grace', generate_password_hash('password'), 1, 5),
+        ('henry', generate_password_hash('password'), 1, 6),
+
+        ('bob', generate_password_hash('password'), 2, 7),
+        ('isabella', generate_password_hash('password'), 2, 8),
+
+        ('admin', generate_password_hash('password'), 3, 9)
+    ]
 )
 
 cursor.executemany(

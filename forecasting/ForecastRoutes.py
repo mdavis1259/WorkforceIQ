@@ -11,8 +11,7 @@ forecasting_bp = Blueprint(
     template_folder="templates"
 )
 
-
-@forecasting_bp.route("/forecast")
+@forecasting_bp.route("/forecast", methods=["GET", "POST"])
 @login_required
 def forecast():
 
@@ -25,10 +24,17 @@ def forecast():
 
         service = ForecastService(repository)
 
-        forecasts = service.get_forecasts()
+        forecasts = []
 
-        if not forecasts:
-            forecasts = service.generate_draft_forecast()
+        if request.method == "POST":
+            
+            week_start = request.form["week_start"]
+
+            forecasts = service.generate_two_week_forecast(week_start)
+
+        else:
+
+            forecasts = service.generate_two_week_forecast()
 
     finally:
         if conn:

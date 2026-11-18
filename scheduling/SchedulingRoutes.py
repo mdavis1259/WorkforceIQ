@@ -189,8 +189,7 @@ def delete_staffing_requirement():
     try:
 
         service.delete_staffing_requirement(
-            request.form["shift_id"],
-            request.form["role_id"]
+            request.form["requirement_id"],
         )
 
         return redirect(url_for("scheduling.shift_management"))
@@ -208,8 +207,7 @@ def update_staffing_requirement():
     try:
 
         service.update_staffing_requirement(
-            request.form["shift_id"],
-            request.form["role_id"],
+            request.form["requirement_id"],
             request.form["required_count"]
         )
 
@@ -231,11 +229,7 @@ def generate_schedule():
 
         schedule, summary = service.generate_week(week_start)
 
-        print(summary)
-
         assignments = service.get_assignments(schedule["schedule_id"])
-        
-        print(assignments)
 
         return render_template(
             "schedule.html", 

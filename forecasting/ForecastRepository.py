@@ -88,6 +88,32 @@ class ForecastRepository:
 
         return cursor.fetchall()
 
+    def get_forecast_by_date(self, forecast_date):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Forecasts
+            WHERE forecast_date = ?
+        """, (forecast_date,))
+
+        return cursor.fetchone()
+
+    def get_forecasts_from_date(self, start_date):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT *
+            FROM Forecasts
+            WHERE forecast_date >= ?
+            ORDER BY forecast_date
+            LIMIT 14
+        """, (start_date,))
+
+        return cursor.fetchall()
+        
     def approve_forecast(self, forecast_id):
 
         cursor = self.conn.cursor()

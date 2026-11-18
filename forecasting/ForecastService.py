@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 class ForecastService:
@@ -8,13 +8,24 @@ class ForecastService:
     def __init__(self, repository):
         self.repository = repository
 
-    def generate_draft_forecast(self, labor_percent=18.0, uncertainty=1.0):
+    def generate_two_week_forecast(self, start_date=None, labor_percent=18.0, uncertainty=1.0):
         """
         Generate a 14-day staffing forecast
         using historical demand data.
         """
 
-        base_date = date.today()
+        if start_date:
+            base_date = datetime.fromisoformat(start_date).date()
+        
+        else:
+
+            base_date = date.today()
+
+        if hasattr(self.repository, "get_forecast_by_date"):
+            existing_forecast = self.repository.get_forecast_by_date(base_date.isoformat())
+
+            if existing_forecast:
+                return self.repository.get_forecasts_from_date(base_date.isoformat())
 
         history = self.repository.get_demand_history()
 
@@ -38,7 +49,7 @@ class ForecastService:
         ):
             forecast_date = (
                 base_date +
-                timedelta(days=len(forecasts) + 1)
+                timedelta(days=len(forecasts))
             ).isoformat()
             
             prediction = float(
@@ -81,7 +92,13 @@ class ForecastService:
                 "status": "Draft"
             })
 
+        if hasattr(self.repository, "get_forecasts_from_date"):
+            return self.repository.get_forecasts_from_date(base_date.isoformat())
+        
         return forecasts
+
+    def generate_draft_forecast(self, labor_percent=18.0, uncertainty=1.0):
+        return self.generate_two_week_forecast()
     
     def get_forecasts(self):
         return self.repository.get_forecasts()
