@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 
 class ForecastService:
@@ -8,19 +8,26 @@ class ForecastService:
     def __init__(self, repository):
         self.repository = repository
 
-    def generate_two_week_forecast(self):
+    def generate_two_week_forecast(self, start_date=None, labor_percent=18.0, uncertainty=1.0):
         """
         Generate a 14-day staffing forecast
         using historical demand data.
         """
 
-        base_date = date.today()
+        if start_date:
+            base_date = datetime.fromisoformat(start_date).date()
+        
+        else:
+
+            base_date = date.today()
+
+        if hasattr(self.repository, "get_forecast_by_date"):
+            existing_forecast = self.repository.get_forecast_by_date(base_date.isoformat())
+
+            if existing_forecast:
+                return self.repository.get_forecasts_from_date(base_date.isoformat())
 
         history = self.repository.get_demand_history()
-
-        # Replace existing forecast projections
-        # with the newest forecast generation.
-        self.repository.clear_forecasts()
 
         if len(history) < 7:
             return []
@@ -42,14 +49,12 @@ class ForecastService:
         ):
             forecast_date = (
                 base_date +
-                timedelta(days=len(forecasts) + 1)
+                timedelta(days=len(forecasts))
             ).isoformat()
             
             prediction = float(
                 model.predict([[forecast_day]])[0]
             )
-
-            labor_percent = 18.0
 
             labor_budget = round(
                 prediction * (labor_percent / 100),
@@ -60,15 +65,16 @@ class ForecastService:
                 forecast_date,
                 round(prediction, 2),
                 round(
-                    prediction - standard_deviation,
+                    prediction - (standard_deviation * uncertainty),
                     2
                 ),
                 round(
-                    prediction + standard_deviation,
+                    prediction + (standard_deviation * uncertainty),
                     2
                 ),
                 None,
-                labor_budget
+                labor_budget,
+                "Draft"
             )
 
             forecasts.append({
@@ -83,8 +89,30 @@ class ForecastService:
                     2
                 ),
                 "labor_budget": labor_budget,
-                "status": "Pending Review"
+                "status": "Draft"
             })
 
+        if hasattr(self.repository, "get_forecasts_from_date"):
+            return self.repository.get_forecasts_from_date(base_date.isoformat())
+        
         return forecasts
+
+    def generate_draft_forecast(self, labor_percent=18.0, uncertainty=1.0):
+        return self.generate_two_week_forecast()
     
+    def get_forecasts(self):
+        return self.repository.get_forecasts()
+
+    def update_forecast(self, forecast_id, projected_sales, labor_percent=18.0):
+
+        labor_budget = round(projected_sales * (labor_percent / 100), 2)
+
+        self.repository.update_forecast(forecast_id, projected_sales, labor_budget)
+
+    def approve_forecast(self, forecast_id):
+
+        self.repository.approve_forecast(forecast_id)
+
+    def update_draft_forecasts(self, labor_percent, uncertainty):
+
+        self.repository.update_draft_forecasts(labor_percent, uncertainty)

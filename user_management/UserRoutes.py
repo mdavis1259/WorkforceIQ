@@ -41,6 +41,8 @@ from shared.exceptions import (
 from database.connection import get_db_connection
 from user_management.UserRepository import UserRepository
 from user_management.UserService import UserService
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
 
 # =====================================================
 # USER MANAGEMENT BLUEPRINT
@@ -51,7 +53,6 @@ user_bp = Blueprint(
     __name__,
     template_folder="templates"
 )
-
 
 # =====================================================
 # HELPERS
@@ -75,17 +76,6 @@ def _require_administrator():
         )
     
 
-def _build_user_service():
-
-    conn = get_db_connection()
-
-    repository = UserRepository(conn)
-
-    service = UserService(repository)
-
-    return service, conn
-
-
 def _user_response(user):
     """
     Convert a User contract object into an
@@ -97,26 +87,34 @@ def _user_response(user):
         "username": user.username,
         "system_role_id": user.system_role_id,
         "employee_id": user.employee_id,
-        "active": user.active
+        "active": user.active,
+        "force_password_reset": user.force_password_reset
     }
+
+def _build_user_service():
+
+    conn = get_db_connection()
+    repository = UserRepository(conn)
+    service = UserService(repository)
+    return service, conn
 
 
 @user_bp.route("/users")
 @login_required
 def users():
-    
+
     service, conn = _build_user_service()
 
     try:
-
-        _require_administrator
+        _require_administrator()
 
         users = service.list_users()
 
-        return render_template(
-            "users.html",
-            users=users
-        )
+        employee_service = EmployeeService(EmployeeRepository(conn))
+
+        employees = employee_service.list_employees()
+
+        return render_template("users.html", users=users, employees=employees)
 
     finally:
         if conn:
@@ -166,7 +164,6 @@ def list_users():
         if conn:
             conn.close()
 
-
 # =====================================================
 # POST /api/users
 # =====================================================
@@ -189,15 +186,21 @@ def create_user():
 
         data = request.get_json() or {}
 
-        user = service.create_user(
+        user, temporary_password = service.create_user(
             username=data.get("username"),
-            password=data.get("password"),
             system_role_id=data.get("system_role_id"),
-            employee_id=data.get("employee_id")
+            employee_id=data.get("employee_id"),
+            force_password_reset=data.get("force_password_reset", True)
         )
 
         return jsonify(
-            _user_response(user)
+            {
+                "user":
+                    _user_response(user),
+                
+                "temporary_password":
+                    temporary_password
+            }
         ), 201
 
     except ValidationError as ex:
@@ -267,6 +270,10 @@ def update_user(userid):
                 userid,
                 data["system_role_id"]
             )
+
+        elif "force_password_reset" in data:
+
+            user = service.set_force_password_reset(userid, data["force_password_reset"])
 
         elif "password_hash" in data:
 

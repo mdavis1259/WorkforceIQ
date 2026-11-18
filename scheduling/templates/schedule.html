@@ -2,7 +2,7 @@
 
 {% block content %}
 
-<h1>Draft Weekly Schedule</h1>
+<h1>Weekly Schedule</h1>
 
 <form
     method="post"
@@ -17,23 +17,67 @@
     >
 
     <button type="submit">
-        Generate Schedule
+        Retrieve Schedule
     </button>
 
     {% if schedule %}
 
-    <h2>Draft Schedule Generated</h2>
-
     <p>
-    Week Start: {{ schedule["week_start"] }}
+        Week Start: {{ schedule["week_start"] }}
     </p>
 
-    <p>
-    Status: {{ schedule["status"] }}
-    </p>
+    <h3>Staffing Requirements Evaluated</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Workday</th>
+                <th>Shift</th>
+                <th>Role</th>
+                <th>Required</th>
+                <th>Assigned</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for req in summary.requirements %}
+            <tr>
+                <td>{{ req.workday }}</td>
+                <td>{{ req.shift }}</td>
+                <td>{{ req.role }}</td>
+                <td>{{ req.required_count }}</td>
+                <td>{{ req.assigned_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Scheduling Summary</h3>
+
+    <table>
+        <tr>
+            <td>Requirements Processed</td>
+            <td>{{ summary.requirements_processed }}</td>
+        </tr>
+
+        <tr>
+            <td>Employees Considered</td>
+            <td>{{ summary.employees_considered }}</td>
+        </tr>
+
+        <tr>
+            <td>Employees Assigned</td>
+            <td>{{ summary.employees_assigned }}</td>
+        </tr>
+
+        <tr>
+            <td>Unfilled Requirements</td>
+            <td>{{ summary.unfilled_requirements }}</td>
+        </tr>
+    </table>
 
     <p>
-        Assignments found: {{ assignments|length }}
+        Status: {{ schedule["status"] }}
     </p>
 
     {% endif %}
@@ -47,16 +91,52 @@
             <th>Employee</th>
             <th>Date</th>
             <th>Shift</th>
+            <th>Hours</th>
+            <th>Rate</th>
+            <th>Labor Cost</th>
         </tr>
 
         {% for assignment in assignments %}
         <tr>
-            <td>{{ assignment.employee_id }}</td>
+            <td>{{ assignment.first_name }}
+                {{ assignment.last_name }}
+            </td>
             <td>{{ assignment.schedule_date }}</td>
-            <td>{{ assignment.shift_id }}</td>
+            <td>{{ assignment.shift_name }}</td>
+            <td>{{ assignment.hours }}</td>
+            <td>${{ "%.2f"|format(assignment.hourly_rate) }}</td>
+            <td>
+                ${{ "%.2f"|format(assignment.hours * assignment.hourly_rate) }}
+            </td>
         </tr>
         {% endfor %}
 
+    </table>
+
+    <h3>Daily Labor Analysis</h3>
+
+    <table>
+        <tr>
+            <th>Date</th>
+            <th>Scheduled Labor Cost</th>
+            <th>Labor Budget</th>
+            <th>Daily Variance</th>
+        </tr>
+
+        {% for date, cost in summary.daily_labor_cost.items() %}
+        <tr>
+            <td>{{ date }}</td>
+            <td>${{ "%.2f"|format(cost) }}</td>
+            <td>${{ "%.2f"|format(summary.daily_labor_budget.get(date, 0)) }}</td>
+            <td
+                {% if summary.daily_variance.get(date, 0) < 0 %}
+                    style="color:red;font-weight:bold;"
+                {% else %}
+                    style="color:green;font-weight:bold;"
+                {% endif %}
+            >${{ "%.2f"|format(summary.daily_variance.get(date, 0)) }}</td>
+        </tr>
+        {% endfor %}
     </table>
 
 {% endif %}

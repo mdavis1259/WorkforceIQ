@@ -119,6 +119,7 @@ class SchedulingRepository:
 
         cursor.execute("""
             SELECT
+                sr.requirement_id,
                 sr.shift_id,
                 sr.role_id,
                 s.shift_name,
@@ -205,8 +206,7 @@ class SchedulingRepository:
 
     def update_staffing_requirement(
         self,
-        shift_id,
-        role_id,
+        requirement_id,
         required_count
     ):
 
@@ -215,26 +215,23 @@ class SchedulingRepository:
         cursor.execute("""
             UPDATE StaffingRequirements
             SET required_count = ?
-            WHERE shift_id = ?
-            AND role_id = ?
+            WHERE requirement_id = ?
         """, (
             required_count,
-            shift_id,
-            role_id
+            requirement_id
         ))
 
         self.conn.commit()
 
-    def delete_staffing_requirement(self, shift_id, role_id):
+    def delete_staffing_requirement(self, requirement_id):
 
         cursor = self.conn.cursor()
 
         cursor.execute("""
             DELETE
             FROM StaffingRequirements
-            WHERE shift_id = ?
-            AND role_id = ?
-        """, (shift_id, role_id))
+            WHERE requirement_id = ?
+        """, (requirement_id,))
 
         self.conn.commit()
 
@@ -366,10 +363,19 @@ class SchedulingRepository:
         cursor = self.conn.cursor()
 
         cursor.execute("""
-            SELECT *
-            FROM ShiftAssignments
-            WHERE schedule_id = ?
-            ORDER BY schedule_date
+            SELECT
+                sa.*,
+                e.first_name,
+                e.last_name,
+                e.hourly_rate,
+                s.shift_name
+            FROM ShiftAssignments sa
+            JOIN Employees e
+                ON sa.employee_id = e.employee_id
+            JOIN Shifts s
+                ON sa.shift_id = s.shift_id
+            WHERE sa.schedule_id = ?
+            ORDER BY sa.schedule_date
         """, (schedule_id,))
 
         return cursor.fetchall()
@@ -379,12 +385,41 @@ class SchedulingRepository:
         cursor = self.conn.cursor()
 
         cursor.execute("""
-            SELECT *
-            FROM StaffingRequirements
-            ORDER BY workday_id
+            SELECT
+                sr.workday_id,
+                wd.day_name,
+
+                sr.shift_id,
+                s.shift_name,
+
+                sr.role_id,
+                r.role_name,
+
+                sr.required_count
+
+            FROM StaffingRequirements sr
+
+            JOIN Workdays wd
+                ON sr.workday_id = wd.workday_id
+
+            JOIN Shifts s
+                ON sr.shift_id = s.shift_id
+
+            JOIN Roles r
+                ON sr.role_id = r.role_id
+
+            ORDER BY 
+                sr.workday_id,
+                s.start_time,
+                r.role_name
         """)
 
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+
+        if rows:
+            print(dict(rows[0]))
+
+        return rows
 
     # ======================================
     # EMPLOYEES
