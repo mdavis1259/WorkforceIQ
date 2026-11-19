@@ -86,10 +86,13 @@
         let originalValues = null;
         let creatingEvent = false;
 
+        // Function to remove an event from the calendar and database
+        // Prompts the user for confirmation before deletion
         function removeEvent(event) {
             if (!event) {
                 return;
             }
+            // Opens a confirmation dialog to confirm deletion of the event
             if (confirm('Are you sure you want to delete this event?')) {
                 // Call delete API endpoint to remove the event from the database
                 fetch('/availability', {

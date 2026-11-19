@@ -1,185 +1,100 @@
-from database.connection import get_db_connection
-from availability.AvailabilityService import build_availability_occurrences
+"""
+Availability Repository
+
+Per the WorkforceIQ SDS, repositories own all
+database access and SQL for their module.
+
+Availability owns:
+
+    - Availability
+    - Shifts
+"""
+class AvailabilityRepository:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
 
 
-# Fetches all availability data for all employees, including shift details
-def get_availability():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # Fetches all availability data for all employees, including shift details
+    def get_availability(self):
+        cursor = self.conn.cursor()
 
-    cursor.execute(
-                   """
-                   SELECT ea.*, s.shift_name, s.start_time, s.end_time
-                   FROM EmployeeAvailability AS ea
-                   JOIN Shifts AS s ON s.shift_id = ea.shift_id
-                   ORDER BY ea.employee_availability_id
-                   """)
-    returned_data = cursor.fetchall()
-    conn.close()
-
-    return returned_data
-
-# Fetches availability data for a specific user, including shift details
-def get_employee_availability(employee_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Get: EmpAvailID, EmpID, Availability, ShiftName, StartTime, EndTime
-    cursor.execute(
-                   """
-                   SELECT ea.*, s.shift_name, s.start_time, s.end_time
-                   FROM EmployeeAvailability AS ea
-                   JOIN Shifts AS s ON s.shift_id = ea.shift_id
-                   WHERE ea.employee_id = ?
-                   """,
-                   (employee_id,))
-    returned_data = cursor.fetchall()
-    conn.close()
-
-    return returned_data
-
-# Creates one or more availability entries and corresponding shifts for an employee.
-def create_availability_series(employee_id, occurrences):
-    if employee_id is None:
-        raise ValueError("EmployeeID is required")
-    if not isinstance(occurrences, list) or not occurrences:
-        raise ValueError("At least one availability occurrence is required")
-
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT employee_id FROM Employees WHERE employee_id = ?", (employee_id,))
-        employee_row = cursor.fetchone()
-        if employee_row is None:
-            return None
-
-        created_events = []
-        for occurrence in occurrences:
-            shift_name = occurrence["title"]
-            start = occurrence["start"]
-            end = occurrence["end"]
-            cursor.execute(
-                "SELECT shift_id FROM Shifts WHERE shift_name = ? AND start_time = ? AND end_time = ?",
-                (shift_name, start, end)
-            )
-            shift_row = cursor.fetchone()
-            if shift_row:
-                shift_id = shift_row['shift_id']
-            else:
-                cursor.execute(
-                    "INSERT INTO Shifts (shift_name, start_time, end_time) VALUES (?, ?, ?)",
-                    (shift_name, start, end)
-                )
-                shift_id = cursor.lastrowid
-
-            cursor.execute(
-                """
-                INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
-                VALUES (?, ?, ?)
-                """,
-                (employee_row['employee_id'], shift_id, occurrence["availability"])
-            )
-            created_events.append({
-                "id": cursor.lastrowid,
-                "start": start,
-                "end": end,
-            })
-
-        conn.commit()
-        return created_events
-    finally:
-        conn.close()
-
-
-def create_availability(employee_id, data):
-    occurrences = build_availability_occurrences(data)
-    created_events = create_availability_series(employee_id, occurrences)
-    if not created_events:
-        return None
-    return created_events[0]["id"]
-
-
-def update_availability(data):
-    if not isinstance(data, dict):
-        raise ValueError("Request body must be a JSON object")
-
-    employee_availability_id = data.get('id')
-    if employee_availability_id is None:
-        raise ValueError("AvailabilityID is required")
-
-    # Get the fields to update from the data dictionary, may not be all fields
-    shift_updates = {}
-    if 'start' in data:
-        shift_updates['start_time'] = data['start']
-    if 'end' in data:
-        shift_updates['end_time'] = data['end']
-    if 'title' in data:
-        shift_name = data['title']
-        if not isinstance(shift_name, str) or not shift_name.strip():
-            raise ValueError("Title must be a non-empty string")
-        shift_updates['shift_name'] = shift_name.strip()
-
-    availability_update = None
-    if 'availability' in data:
-        availability = data['availability']
-        if availability not in (0, 1, False, True):
-            raise ValueError("Availability must be False or True")
-        availability_update = int(availability)
-
-    if not shift_updates and availability_update is None:
-        raise ValueError("No availability changes provided")
-
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
         cursor.execute(
-            "SELECT shift_id FROM EmployeeAvailability WHERE employee_availability_id = ?",
+                    """
+                    SELECT ea.*, s.shift_name, s.start_time, s.end_time
+                    FROM EmployeeAvailability AS ea
+                    JOIN Shifts AS s ON s.shift_id = ea.shift_id
+                    ORDER BY ea.employee_availability_id
+                    """)
+
+        return cursor.fetchall()
+
+    # Fetches availability data for a specific user, including shift details
+    def get_employee_availability(self, employee_id):
+        cursor = self.conn.cursor()
+
+        # Get: EmpAvailID, EmpID, Availability, ShiftName, StartTime, EndTime
+        cursor.execute(
+                    """ 
+                    SELECT ea.*, s.shift_name, s.start_time, s.end_time
+                    FROM EmployeeAvailability AS ea
+                    JOIN Shifts AS s ON s.shift_id = ea.shift_id
+                    WHERE ea.employee_id = ?
+                    """,
+                    (employee_id,)
+        )
+
+        return cursor.fetchall()
+
+    def get_shift(self, shift_name, start_time, end_time):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM Shifts WHERE shift_name = ? AND start_time = ? AND end_time = ?",
+            (shift_name, start_time, end_time)
+        )
+        return cursor.fetchone()
+
+    def create_shift(self, shift_name, start_time, end_time):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO Shifts (shift_name, start_time, end_time) VALUES (?, ?, ?)",
+            (shift_name, start_time, end_time)
+        )
+        return cursor.lastrowid
+
+    def create_availability(self, employee_id, shift_id, availability):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO EmployeeAvailability (employee_id, shift_id, availability) VALUES (?, ?, ?)",
+            (employee_id, shift_id, availability)
+        )
+        return cursor.lastrowid
+
+    def get_shift_by_availability_id(self, employee_availability_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT shift_id "
+            "FROM EmployeeAvailability "
+            "WHERE employee_availability_id = ?",
             (employee_availability_id,)
         )
-        # Check availability entry exists
-        availability_row = cursor.fetchone()
-        if availability_row is None:
-            return False
+        return cursor.fetchone()
 
-        #If shift details changed
-        shift_id = availability_row['shift_id']
-        if shift_updates:
-            # Use string operations to only UPDATE the fields that changed
-            assignments = ', '.join(f"{column} = ?" for column in shift_updates)
-            cursor.execute(
-                f"UPDATE Shifts SET {assignments} WHERE shift_id = ?",
-                (*shift_updates.values(), shift_id)
-            )
+    # Deletes an availability entry and its corresponding shift for an employee, including shift details
+    def delete_availability(self, data):
+        if not isinstance(data, dict):
+            raise ValueError("Request body must be a JSON object")
 
-        # If availability changed
-        if availability_update is not None:
-            cursor.execute(
-                """
-                UPDATE EmployeeAvailability
-                SET availability = ?
-                WHERE employee_availability_id = ?
-                """,
-                (availability_update, employee_availability_id)
-            )
+        employee_availability_id = data.get('id')
+        if employee_availability_id is None:
+            raise ValueError("AvailabilityID is required")
 
-        conn.commit()
-        return True
-    finally:
-        conn.close()
-
-# Deletes an availability entry and its corresponding shift for an employee, including shift details
-def delete_availability(data):
-    if not isinstance(data, dict):
-        raise ValueError("Request body must be a JSON object")
-
-    employee_availability_id = data.get('id')
-    if employee_availability_id is None:
-        raise ValueError("AvailabilityID is required")
-
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
+        cursor = self.conn.cursor()
         cursor.execute(
             "SELECT shift_id FROM EmployeeAvailability WHERE employee_availability_id = ?",
             (employee_availability_id,)
@@ -198,7 +113,28 @@ def delete_availability(data):
             (shift_id,)
         )
 
-        conn.commit()
+        self.conn.commit()
         return True
-    finally:
-        conn.close()
+
+    def update_shift(self, shift_id, shift_updates):
+        if not shift_updates:
+            return
+        assignments = ', '.join(f"{column} = ?" for column in shift_updates)
+        cursor = self.conn.cursor()
+        cursor.execute(
+            f"UPDATE Shifts SET {assignments} WHERE shift_id = ?",
+            (*shift_updates.values(), shift_id)
+        )
+        self.conn.commit()
+
+    def update_availability(self, employee_availability_id, availability):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE EmployeeAvailability SET availability = ? WHERE employee_availability_id = ?",
+            (availability, employee_availability_id)
+        )
+        self.conn.commit()
+
+    # TODO: implement
+    def is_employee_available(self, employee_id, schedule_date, shift_id):
+        return True

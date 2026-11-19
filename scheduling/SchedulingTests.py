@@ -7,6 +7,9 @@ from werkzeug.security import generate_password_hash
 
 from app import app
 
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
+
 from scheduling.SchedulingRepository import (
     SchedulingRepository
 )
@@ -16,19 +19,6 @@ from scheduling.SchedulingService import (
 )
 
 from shared.exceptions import ValidationError
-
-class MockAvailabilityService:
-
-    def __init__(self, available):
-        self.available = available
-
-    def is_employee_available(
-        self, 
-        employee_id, 
-        schedule_date, 
-        shift_id
-    ):
-        return self.available
 
 class SchedulingTests(unittest.TestCase):
 
@@ -215,7 +205,7 @@ class SchedulingTests(unittest.TestCase):
         conn.commit()
         conn.close()
 
-    def get_service(self, availability_service=None):
+    def get_service(self):
 
         conn = sqlite3.connect(
             self.database_path
@@ -227,10 +217,14 @@ class SchedulingTests(unittest.TestCase):
             conn
         )
 
+        employee_service = EmployeeService(
+            EmployeeRepository(conn)
+        )
+
         forecasting_service = None
 
         service = SchedulingService(
-            repository, availability_service, forecasting_service
+            repository, employee_service, forecasting_service
         )
 
         return service, conn
@@ -766,7 +760,7 @@ class SchedulingTests(unittest.TestCase):
     @unittest.skip("Availability service not implemented yet")
     def test_generate_week_skips_unavailable_employee(self):
 
-        service, conn = self.get_service(MockAvailabilityService(False))
+        service, conn = self.get_service()
 
         try:
 
@@ -796,9 +790,7 @@ class SchedulingTests(unittest.TestCase):
     
     def test_generate_week_skips_employee_exceeding_weekly_hour_limit(self):
 
-        service, conn = self.get_service(
-            MockAvailabilityService(True)
-        )
+        service, conn = self.get_service()
 
         try:
 
@@ -875,9 +867,7 @@ class SchedulingTests(unittest.TestCase):
 
     def test_generate_week_prevents_overlapping_assignments(self):
 
-        service, conn = self.get_service(
-            MockAvailabilityService(True)
-        )
+        service, conn = self.get_service()
 
         try:
 

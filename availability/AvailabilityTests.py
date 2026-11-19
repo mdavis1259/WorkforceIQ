@@ -7,19 +7,15 @@ from unittest.mock import patch
 from werkzeug.security import generate_password_hash
 
 from app import app
-from availability.AvailabilityRepository import (
-    create_availability,
-    delete_availability,
-    get_availability,
-    get_employee_availability,
-    update_availability,
-)
-from availability.AvailabilityService import availability_db_to_events
-
-
+from availability.AvailabilityRepository import AvailabilityRepository
+from availability.AvailabilityService import AvailabilityService
+from employee_management.EmployeeRepository import EmployeeRepository
+from employee_management.EmployeeService import EmployeeService
+from shared.exceptions import ValidationError
 class AvailabilityTests(unittest.TestCase):
     def setUp(self):
         self.temp_directory = tempfile.TemporaryDirectory()
+        self.connections = []
         self.database_path = os.path.join(self.temp_directory.name, "availability.db")
         self.original_config = {
             "TESTING": app.config.get("TESTING", False),
@@ -32,6 +28,8 @@ class AvailabilityTests(unittest.TestCase):
         self.client = app.test_client()
 
     def tearDown(self):
+        for connection in self.connections:
+            connection.close()
         self.app_context.pop()
         app.config.update(self.original_config)
         self.temp_directory.cleanup()
@@ -131,6 +129,18 @@ class AvailabilityTests(unittest.TestCase):
         connection.commit()
         connection.close()
 
+    def get_service(self):
+        conn = sqlite3.connect(self.database_path)
+        conn.row_factory = sqlite3.Row
+        self.connections.append(conn)
+
+        repository = AvailabilityRepository(conn)
+        employee_repository = EmployeeRepository(conn)
+        employee_service = EmployeeService(employee_repository)
+        service = AvailabilityService(repository, employee_service)
+
+        return service, conn
+
     def login(self):
         response = self.client.post(
             "/login",
@@ -169,7 +179,9 @@ class AvailabilityTests(unittest.TestCase):
         return data
 
     def test_get_availability_returns_joined_records_for_all_employees(self):
-        rows = get_availability()
+        service, conn = self.get_service()
+        
+        rows = service.get_availability()
 
         self.assertEqual(len(rows), 2)
         self.assertEqual(
@@ -189,14 +201,16 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_get_user_availability_only_returns_the_users_employee_records(self):
-        rows = get_employee_availability(101)
+        service, conn = self.get_service()
+        rows = service.get_employee_availability(101)
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["employee_id"], 101)
         self.assertEqual(rows[0]["shift_name"], "Morning Shift")
 
     def test_create_availability_persists_shift_and_employee_record(self):
-        availability_id = create_availability(101, self.valid_availability(title="  New Shift  "))
+        service, conn = self.get_service()
+        availability_id = service.create_availability(101, self.valid_availability(title="  New Shift  "))
 
         self.assertEqual(availability_id, 3)
         self.assertEqual(
@@ -213,7 +227,8 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_create_availability_accepts_false_and_returns_none_for_unknown_user(self):
-        availability_id = create_availability(
+        service, conn = self.get_service()
+        availability_id = service.create_availability(
             101, self.valid_availability(availability=False)
         )
 
@@ -224,9 +239,40 @@ class AvailabilityTests(unittest.TestCase):
             ),
             [(0,)],
         )
-        self.assertIsNone(create_availability(999, self.valid_availability()))
+        self.assertIsNone(service.create_availability(999, self.valid_availability()))
+
+    def test_unknown_employee_does_not_create_shift_or_availability(self):
+        service, conn = self.get_service()
+        self.assertIsNone(service.create_availability(999, self.valid_availability()))
+        self.assertEqual(self.read_rows("SELECT COUNT(*) FROM Shifts"), [(2,)])
+        self.assertEqual(self.read_rows("SELECT COUNT(*) FROM EmployeeAvailability"), [(2,)])
+
+    def test_recurring_creation_rolls_back_after_insert_failure(self):
+        service, conn = self.get_service()
+        conn.executescript(
+            """
+            CREATE TRIGGER reject_second_occurrence
+            BEFORE INSERT ON EmployeeAvailability
+            WHEN (SELECT start_time FROM Shifts WHERE shift_id = NEW.shift_id)
+                 = '2026-11-18T09:00:00'
+            BEGIN
+                SELECT RAISE(ABORT, 'rejected occurrence');
+            END;
+            """
+        )
+
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "rejected occurrence"):
+            service.create_availability(
+                101,
+                self.valid_availability(recurrence="weekly", recurrence_until="2026-11-18"),
+            )
+
+        self.assertEqual(self.read_rows("SELECT COUNT(*) FROM Shifts"), [(2,)])
+        self.assertEqual(self.read_rows("SELECT COUNT(*) FROM EmployeeAvailability"), [(2,)])
 
     def test_create_availability_rejects_invalid_payloads(self):
+        service, conn = self.get_service()
+        
         invalid_payloads = [
             ([], "Request body must be a JSON object"),
             ({}, "Title must be a non-empty string"),
@@ -274,12 +320,13 @@ class AvailabilityTests(unittest.TestCase):
         for payload, message in invalid_payloads:
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, message):
-                    create_availability(101, payload)
+                    service.create_availability(101, payload)
 
         self.assertEqual(self.read_rows("SELECT COUNT(*) FROM Shifts"), [(2,)])
 
     def test_create_weekly_availability_repeats_until_end_date(self):
-        availability_id = create_availability(
+        service, conn = self.get_service()
+        availability_id = service.create_availability(
             101,
             self.valid_availability(
                 recurrence="weekly",
@@ -307,7 +354,8 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_create_monthly_availability_preserves_end_of_month_dates(self):
-        availability_id = create_availability(
+        service, conn = self.get_service()
+        availability_id = service.create_availability(
             101,
             self.valid_availability(
                 start="2026-01-31T09:00:00",
@@ -341,7 +389,8 @@ class AvailabilityTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "A recurrence end date is required"
         ):
-            create_availability(
+            service, conn = self.get_service()
+            service.create_availability(
                 101,
                 self.valid_availability(recurrence="weekly"),
             )
@@ -350,7 +399,8 @@ class AvailabilityTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "Recurrence end date must be on or after the event date"
         ):
-            create_availability(
+            service, conn = self.get_service()
+            service.create_availability(
                 101,
                 self.valid_availability(
                     recurrence="monthly",
@@ -359,7 +409,8 @@ class AvailabilityTests(unittest.TestCase):
             )
 
     def test_update_availability_updates_shift_fields_and_availability(self):
-        updated = update_availability(
+        service, conn = self.get_service()
+        updated = service.update_availability(
             {
                 "id": 1,
                 "title": "  Updated Shift ",
@@ -383,7 +434,8 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_update_availability_supports_availability_only_updates(self):
-        self.assertTrue(update_availability({"id": 1, "availability": 0}))
+        service, conn = self.get_service()
+        self.assertTrue(service.update_availability({"id": 1, "availability": 0}))
         self.assertEqual(
             self.read_rows(
                 "SELECT availability FROM EmployeeAvailability WHERE employee_availability_id = 1"
@@ -392,9 +444,11 @@ class AvailabilityTests(unittest.TestCase):
         )
 
     def test_update_availability_returns_false_for_unknown_record(self):
-        self.assertFalse(update_availability({"id": 999, "title": "Updated"}))
+        service, conn = self.get_service()
+        self.assertFalse(service.update_availability({"id": 999, "title": "Updated"}))
 
     def test_update_availability_rejects_invalid_payloads(self):
+        service, conn = self.get_service()
         invalid_payloads = [
             (None, "Request body must be a JSON object"),
             ({}, "AvailabilityID is required"),
@@ -406,10 +460,11 @@ class AvailabilityTests(unittest.TestCase):
         for payload, message in invalid_payloads:
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, message):
-                    update_availability(payload)
+                    service.update_availability(payload)
 
     def test_delete_availability_removes_record_and_its_shift(self):
-        self.assertTrue(delete_availability({"id": 1}))
+        service, conn = self.get_service()
+        self.assertTrue(service.delete_availability({"id": 1}))
         self.assertEqual(
             self.read_rows("SELECT * FROM EmployeeAvailability WHERE employee_availability_id = 1"),
             [],
@@ -417,19 +472,22 @@ class AvailabilityTests(unittest.TestCase):
         self.assertEqual(self.read_rows("SELECT * FROM Shifts WHERE shift_id = 1"), [])
 
     def test_delete_availability_returns_false_for_unknown_record(self):
-        self.assertFalse(delete_availability({"id": 999}))
+        service, conn = self.get_service()
+        self.assertFalse(service.delete_availability({"id": 999}))
 
     def test_delete_availability_rejects_invalid_payloads(self):
+        service, conn = self.get_service()
         for payload, message in (
             (None, "Request body must be a JSON object"),
             ({}, "AvailabilityID is required"),
         ):
             with self.subTest(payload=payload):
                 with self.assertRaisesRegex(ValueError, message):
-                    delete_availability(payload)
+                    service.delete_availability(payload)
 
     def test_availability_db_rows_are_converted_to_calendar_events(self):
-        events = availability_db_to_events(get_availability())
+        service, conn = self.get_service()
+        events = service.availability_db_to_events(service.get_availability())
 
         self.assertEqual(
             events,
@@ -450,7 +508,7 @@ class AvailabilityTests(unittest.TestCase):
                 },
             ],
         )
-        self.assertEqual(availability_db_to_events([]), [])
+        self.assertEqual(service.availability_db_to_events([]), [])
 
     def test_availability_page_renders_only_logged_in_users_events(self):
         self.login()
@@ -510,7 +568,7 @@ class AvailabilityTests(unittest.TestCase):
         self.login()
 
         with patch(
-            "availability.AvailabilityRoutes.create_availability_series",
+            "availability.AvailabilityService.AvailabilityService.create_availability_series",
             return_value=None,
         ):
             response = self.client.post(
@@ -519,6 +577,48 @@ class AvailabilityTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.get_json()["message"], "Employee not found")
+
+    def test_availability_route_rejects_unknown_employee_without_writes(self):
+        self.login_administrator()
+        with self.client.session_transaction() as session:
+            session["availability_employee"] = 999
+
+        response = self.client.post("/availability", json=self.valid_availability())
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.get_json()["message"], "Employee not found")
+        self.assertEqual(self.read_rows("SELECT COUNT(*) FROM Shifts"), [(2,)])
+        self.assertEqual(self.read_rows("SELECT COUNT(*) FROM EmployeeAvailability"), [(2,)])
+
+    def test_routes_close_connections_after_success_redirect_and_error(self):
+        self.login()
+        connections = []
+
+        def open_connection():
+            conn = sqlite3.connect(self.database_path)
+            conn.row_factory = sqlite3.Row
+            connections.append(conn)
+            return conn
+
+        with patch("availability.AvailabilityRoutes.get_db_connection", side_effect=open_connection):
+            self.assertEqual(self.client.get("/availability").status_code, 200)
+            self.assertEqual(self.client.get("/avail_select").status_code, 302)
+            self.assertEqual(self.client.post("/availability", json={}).status_code, 400)
+            with patch.object(AvailabilityService, "get_employee_availability",
+                              side_effect=RuntimeError("test failure")):
+                with self.assertRaisesRegex(RuntimeError, "test failure"):
+                    self.client.get("/availability")
+            with patch("availability.AvailabilityRoutes._build_availability_service",
+                       side_effect=RuntimeError("construction failure")):
+                for url in ("/availability", "/avail_select"):
+                    with self.subTest(url=url):
+                        with self.assertRaisesRegex(RuntimeError, "construction failure"):
+                            self.client.get(url)
+
+        self.assertEqual(len(connections), 6)
+        for conn in connections:
+            with self.assertRaises(sqlite3.ProgrammingError):
+                conn.execute("SELECT 1")
 
     def test_associate_availability_selector_redirects_to_own_availability(self):
         self.login()
