@@ -208,6 +208,7 @@ cursor.execute("""
         employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
         employee_id INTEGER NOT NULL,
         shift_id INTEGER NOT NULL,
+        workday_id INTEGER NOT NULL,
         availability INTEGER NOT NULL DEFAULT 1,
 
         CONSTRAINT fk_employee_id
@@ -216,8 +217,11 @@ cursor.execute("""
         CONSTRAINT fk_shift_id
             FOREIGN KEY (shift_id)
             REFERENCES Shifts(shift_id),
-        CONSTRAINT boolean_availability
-            CHECK (availability IN (0, 1))
+        CONSTRAINT fk_workday_id
+            FOREIGN KEY (workday_id)
+            REFERENCES Workdays(workday_id),
+        CONSTRAINT chk_availability
+            CHECK (availability IN (0, 1, 2))
     )
 """)
 
@@ -483,40 +487,16 @@ for (
         required_count
     ))
 
-cursor.executemany(
-    """
-    INSERT INTO Shifts (
-        shift_id,
-        shift_name,
-        start_time,
-        end_time
-    )
-    VALUES (?, ?, ?, ?)
-    """,
-    [
-        (4, "Availability 1", "2026-11-17T08:00:00Z", "2026-11-17T12:00:00Z"),
-        (5, "Availability 2", "2026-11-17T13:00:00Z", "2026-11-17T17:00:00Z"),
-        (6, "Availability 3", "2026-11-17T18:00:00Z", "2026-11-17T22:00:00Z")
-    ]
-)
+# cursor.execute(
+#     """
+#     INSERT INTO EmployeeAvailability (employee_id, workday_id, shift_id, availability)
+#     SELECT e.employee_id, w.workday_id, s.shift_id, 1
+#     FROM Employees AS e
+#     CROSS JOIN Workdays AS w
+#     CROSS JOIN Shifts AS s
+#     """
+# )
 
-cursor.executemany(
-    """
-    INSERT INTO EmployeeAvailability (employee_id, shift_id, availability)
-    VALUES (?, ?, ?)
-    """,
-    [
-        (1, 4, 1),
-        (1, 5, 0),
-        (1, 6, 1),
-        (2, 4, 1),
-        (2, 5, 1),
-        (2, 6, 0),
-        (9, 4, 0),
-        (9, 5, 1),
-        (9, 6, 1),
-    ],
-)
 conn.commit()
 conn.close()
 

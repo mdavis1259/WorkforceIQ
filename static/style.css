@@ -184,14 +184,36 @@ dialog::backdrop {
     width: 100%;
 }
 
-.availability-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.availability-event-details p {
+    margin: 0 0 10px;
 }
 
-.availability-checkbox label {
-    margin-bottom: 0;
+.availability-choice-group {
+    display: flex;
+    gap: 10px;
+}
+
+.availability-choice {
+    padding: 8px 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: white;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.availability-choice.is-selected {
+    border-color: transparent;
+    color: white;
+}
+
+#availableButton.is-selected {
+    background: green;
+}
+
+#busyButton.is-selected {
+    background: red;
 }
 
 .availability-modal-actions {
@@ -213,15 +235,7 @@ dialog::backdrop {
     color: white;
 }
 
-#cancelCreateEventBtn {
-    background: #e0e0e0;
-    color: var(--text);
-}
 
-#deleteEventBtn {
-    background: #d32f2f;
-    color: white;
-}
 
 /* ==========================
    BUTTONS

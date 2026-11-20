@@ -19,7 +19,6 @@ class AvailabilityRepository:
     def rollback(self):
         self.conn.rollback()
 
-
     # Fetches all availability data for all employees, including shift details
     def get_availability(self):
         cursor = self.conn.cursor()
@@ -67,18 +66,19 @@ class AvailabilityRepository:
         )
         return cursor.lastrowid
 
-    def create_availability(self, employee_id, shift_id, availability):
+    def create_availability(self, employee_id, shift_id, workday_id, availability):
         cursor = self.conn.cursor()
         cursor.execute(
-            "INSERT INTO EmployeeAvailability (employee_id, shift_id, availability) VALUES (?, ?, ?)",
-            (employee_id, shift_id, availability)
+            "INSERT INTO EmployeeAvailability (employee_id, shift_id, workday_id, availability) VALUES (?, ?, ?, ?)",
+            (employee_id, shift_id, workday_id, availability)
         )
+        self.conn.commit()
         return cursor.lastrowid
 
-    def get_shift_by_availability_id(self, employee_availability_id):
+    def get_availability_by_id(self, employee_availability_id):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT shift_id "
+            "SELECT * "
             "FROM EmployeeAvailability "
             "WHERE employee_availability_id = ?",
             (employee_availability_id,)
@@ -135,6 +135,74 @@ class AvailabilityRepository:
         )
         self.conn.commit()
 
-    # TODO: implement
-    def is_employee_available(self, employee_id, schedule_date, shift_id):
-        return True
+    def get_matching_availability(self, employee_id, workday_id, shift_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM EmployeeAvailability WHERE employee_id = ? AND workday_id = ? AND shift_id = ?",
+            (employee_id, workday_id, shift_id)
+        )
+        return cursor.fetchone()
+
+    def get_shift(self, shift_name, start_time, end_time):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM Shifts WHERE shift_name = ? AND start_time = ? AND end_time = ?",
+            (shift_name, start_time, end_time)
+        )
+        return cursor.fetchone()
+
+    def get_shifts(self):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT * FROM Shifts"
+        )
+        return cursor.fetchall()
+
+    def get_days_of_week(self, employee_availability_id, shift_id, availability):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT workday_id FROM EmployeeAvailability 
+            WHERE employee_availability_id = ?
+            AND shift_id = ? 
+            AND availability = ?
+            """,
+            (employee_availability_id, shift_id, availability)
+        )
+        days = cursor.fetchall()
+
+        # Extract the workday_id values from the query result
+        daystring = ", ".join(
+            str(0 if day["workday_id"] == 7 else day["workday_id"])
+            for day in days
+        )
+
+        return daystring
+
+
+    def get_shift_name(self, shift_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT shift_name FROM Shifts WHERE shift_id = ?",
+            (shift_id,)
+        )
+        row = cursor.fetchone()
+        return row['shift_name'] if row else None
+
+    def get_shift_start_time(self, shift_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT start_time FROM Shifts WHERE shift_id = ?",
+            (shift_id,)
+        )
+        row = cursor.fetchone()
+        return row['start_time'] if row else None
+
+    def get_shift_end_time(self, shift_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT end_time FROM Shifts WHERE shift_id = ?",
+            (shift_id,)
+        )
+        row = cursor.fetchone()
+        return row['end_time'] if row else None

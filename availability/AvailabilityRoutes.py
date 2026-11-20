@@ -32,24 +32,30 @@ def _build_availability_service(conn):
     return service
 
 
-@availability_bp.route('/availability', methods=["GET", "POST", "DELETE"])
+@availability_bp.route('/availability', methods=["GET", "POST"])
 @login_required
 def availability():
     conn = get_db_connection()
     try:
         service = _build_availability_service(conn)
 
+        # Set variable in session that tracks current employee whose availability is being managed
         if current_user.system_role_id == 1:
             employee_id = current_user.employee_id
             session["availability_employee"] = employee_id
+
         else:
             employee_id = session.get("availability_employee", current_user.employee_id)
 
+            # If the current user is a manager
             if current_user.system_role_id == 2:
+                # Managers can only select from associates
                 selectable_employee_ids = {
                     employee.employee_id
                     for employee in service.list_employees(associates_only=True)
                 }
+                # Remove session variable and redirect if they can't access an employee 
+                # (i.e. Manager for another Manager)
                 if (
                     employee_id != current_user.employee_id
                     and employee_id not in selectable_employee_ids
@@ -57,40 +63,20 @@ def availability():
                     session.pop("availability_employee", None)
                     return redirect(url_for("availability.avail_select"))
 
+
+        # Used for Availability updates
         if request.method == "POST":
             data = request.get_json()
             try:
-                if not isinstance(data, dict) or data.get("id") is None:
-                    occurrences = service.build_availability_occurrences(data)
-                    created_events = service.create_availability_series(employee_id, occurrences)
-                    if created_events is None:
-                        return jsonify({"status": "error",
-                                        "message": "Employee not found"
-                                        }), 404
-                    return jsonify({
-                        "status": "success",
-                        "id": created_events[0]["id"],
-                        "events": created_events,
-                        "message": "Availability created successfully",
-                    }), 201
-                updated = service.update_availability(data)
+                updated = service.update_availability(data, employee_id)
             except ValueError as error:
                 return jsonify({"status": "error", "message": str(error)}), 400
             if not updated:
                 return jsonify({"status": "error", "message": "Availability not found"}), 404
-            return jsonify({"status": "success", "message": "Availability updated successfully"}), 200
+            return jsonify({"status": "success", "id": updated, "message": "Availability updated successfully"}), 200
+        
 
-        if request.method == "DELETE":
-            data = request.get_json()
-            try:
-                deleted = service.delete_availability(data)
-            except ValueError as error:
-                return jsonify({"status": "error", "message": str(error)}), 400
-            if not deleted:
-                return jsonify({"status": "error", "message": "Availability not found"}), 404
-            return jsonify({"status": "success", "message": "Availability deleted successfully"}), 200
-
-        avail_events = service.availability_db_to_events(service.get_employee_availability(employee_id))
+        avail_events = service.availability_db_to_events(service.get_employee_availability(employee_id), employee_id)
         return render_template('availability.html', availability=avail_events)
     finally:
         conn.close()
