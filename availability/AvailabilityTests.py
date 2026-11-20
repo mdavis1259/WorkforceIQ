@@ -2,7 +2,6 @@ import os
 import sqlite3
 import tempfile
 import unittest
-from datetime import date
 from unittest.mock import patch
 
 from werkzeug.security import generate_password_hash
@@ -428,9 +427,9 @@ class AvailabilityTests(unittest.TestCase):
     def test_is_employee_available_uses_workday_shift_and_availability(self):
         service, _ = self.get_service()
 
-        self.assertTrue(service.is_employee_available(202, date(2026, 11, 24), 2))
-        self.assertFalse(service.is_employee_available(101, date(2026, 11, 24), 1))
-        self.assertFalse(service.is_employee_available(101, date(2026, 11, 24), 2))
+        self.assertTrue(service.is_employee_available(202, 2, 2))
+        self.assertFalse(service.is_employee_available(101, 2, 1))
+        self.assertFalse(service.is_employee_available(101, 2, 2))
 
     def test_update_availability_converts_utc_timestamps_to_local_workday(self):
         connection = sqlite3.connect(self.database_path)

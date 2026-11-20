@@ -3,6 +3,8 @@ import sqlite3
 import tempfile
 import unittest
 
+from availability.AvailabilityService import AvailabilityService
+from availability.AvailabilityRepository import AvailabilityRepository
 from werkzeug.security import generate_password_hash
 
 from app import app
@@ -17,6 +19,7 @@ from scheduling.SchedulingRepository import (
 from scheduling.SchedulingService import (
     SchedulingService
 )
+from scheduling.SchedulingRoutes import _build_scheduling_service
 
 from shared.exceptions import ValidationError
 
@@ -102,6 +105,18 @@ class SchedulingTests(unittest.TestCase):
                 shift_name TEXT NOT NULL,
                 start_time TEXT NOT NULL,
                 end_time TEXT NOT NULL
+            );
+
+            CREATE TABLE EmployeeAvailability(
+                employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                shift_id INTEGER NOT NULL,
+                workday_id INTEGER NOT NULL,
+                availability INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
+                FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
+                FOREIGN KEY (workday_id) REFERENCES Workdays(workday_id),
+                CHECK (availability IN (0, 1, 2))
             );
 
             CREATE TABLE StaffingRequirements(
@@ -202,8 +217,26 @@ class SchedulingTests(unittest.TestCase):
             """
         )
 
+        conn.execute(
+            """
+            INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability)
+            VALUES (101, 1, 1, 0)
+            """
+        )
+
         conn.commit()
         conn.close()
+
+    def test_scheduling_route_service_builder_wires_availability(self):
+        service, conn = _build_scheduling_service()
+        try:
+            self.assertIs(
+                service.availability_service.employee_service,
+                service.employee_service,
+            )
+            self.assertTrue(service.availability_service.is_employee_available(101, 1, 1))
+        finally:
+            conn.close()
 
     def get_service(self):
 
@@ -221,10 +254,14 @@ class SchedulingTests(unittest.TestCase):
             EmployeeRepository(conn)
         )
 
+        availability_service = AvailabilityService(
+            AvailabilityRepository(conn), employee_service
+        )
+
         forecasting_service = None
 
         service = SchedulingService(
-            repository, employee_service, forecasting_service
+            repository, employee_service, forecasting_service, availability_service
         )
 
         return service, conn
@@ -756,13 +793,16 @@ class SchedulingTests(unittest.TestCase):
             0
         )
 
-    # TODO: remove this skip
-    @unittest.skip("Availability service not implemented yet")
     def test_generate_week_skips_unavailable_employee(self):
 
         service, conn = self.get_service()
 
         try:
+            conn.execute(
+                "UPDATE EmployeeAvailability SET availability = 2 "
+                "WHERE employee_id = 101 AND shift_id = 1 AND workday_id = 1"
+            )
+            conn.commit()
 
             service.create_staffing_requirement(
                 1,  # Monday
@@ -787,6 +827,20 @@ class SchedulingTests(unittest.TestCase):
             len(assignments),
             0
         )
+
+    def test_generate_week_skips_employee_without_matching_availability(self):
+        service, conn = self.get_service()
+        try:
+            conn.execute("DELETE FROM EmployeeAvailability WHERE workday_id = 1")
+            conn.commit()
+            service.create_staffing_requirement(1, 1, 1, 1)
+
+            schedule, _ = service.generate_week("2026-11-09")
+            assignments = service.get_assignments(schedule["schedule_id"])
+        finally:
+            conn.close()
+
+        self.assertEqual(len(assignments), 0)
     
     def test_generate_week_skips_employee_exceeding_weekly_hour_limit(self):
 
@@ -910,6 +964,12 @@ class SchedulingTests(unittest.TestCase):
                 """
             )
 
+            conn.execute(
+                """
+                INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability)
+                VALUES (101, 2, 1, 0)
+                """
+            )
             conn.commit()
 
             service.create_staffing_requirement(

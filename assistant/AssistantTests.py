@@ -24,13 +24,15 @@ def emp(i, first, last, role_id, quals=(), active=True):
 ROLES = [{"role_id": 1, "role_name": "Server"}, {"role_id": 2, "role_name": "Cook"}]
 QUALS = [{"qualification_id": 10, "qualification_name": "Food Handler"}]
 EMPLOYEES = [emp(1, "Ana", "Ruiz", 1, [10]), emp(2, "Ben", "Lee", 2),
-             emp(3, "Cy", "Fox", 1), emp(4, "Di", "Old", 1, active=False)]
+             emp(3, "Cy", "Fox", 1), emp(4, "Di", "Old", 1, active=False),
+             emp(5, "Eli", "Gray", 1)]
 AVAIL = [
-    {"employee_id": 1, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
-    {"employee_id": 2, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
-    {"employee_id": 3, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
-    {"employee_id": 4, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
-    {"employee_id": 1, "shift_id": 1, "shift_name": "Morning Shift", "availability": 1},
+    {"employee_id": 1, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
+    {"employee_id": 2, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
+    {"employee_id": 3, "shift_id": 3, "shift_name": "Evening Shift", "availability": 2},
+    {"employee_id": 4, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
+    {"employee_id": 5, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
+    {"employee_id": 1, "shift_id": 1, "shift_name": "Morning Shift", "availability": 0},
 ]
 
 
@@ -194,12 +196,13 @@ class ServiceTests(unittest.TestCase):
         self.assertIn("2 employees are available", r["answer"])
         self.assertIn("2026-11-20", r["answer"])
 
-    def test_inactive_and_unavailable_excluded(self):
+    def test_inactive_unavailable_and_unspecified_excluded(self):
         r = self.ask({"query_type": "AVAILABLE_FOR_SHIFT", "date": "friday",
                       "shift_name": "evening"})
         ids = [e["employee_id"] for e in r["employees"]]
         self.assertNotIn(3, ids)
         self.assertNotIn(4, ids)
+        self.assertNotIn(5, ids)
 
     def test_no_wages_in_response(self):
         r = self.ask({"query_type": "AVAILABLE_FOR_SHIFT", "date": "friday",

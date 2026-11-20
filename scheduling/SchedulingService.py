@@ -7,11 +7,13 @@ class SchedulingService:
         self, 
         scheduling_repository, 
         employee_service,
-        forecasting_service
+        forecasting_service,
+        availability_service
     ):
         self.scheduling_repository = scheduling_repository
         self.employee_service = employee_service
         self.forecasting_service = forecasting_service
+        self.availability_service = availability_service
 
     # ==========================================
     # SHIFTS
@@ -283,18 +285,16 @@ class SchedulingService:
 
             candidate_employees = employees
 
-            # Emplyee Availability Filter
-            # if self.availability_service:
-
-            #     candidate_employees = [
-            #         employee
-            #         for employee in candidate_employees
-            #         if self.availability_service.is_employee_available(
-            #             employee["employee_id"],
-            #             schedule_date,
-            #             requirement["shift_id"]
-            #         )
-            #     ]
+            # Employee Availability Filter
+            candidate_employees = [
+                employee
+                for employee in candidate_employees
+                if self.availability_service.is_employee_available(
+                    employee["employee_id"],
+                    requirement["workday_id"],
+                    requirement["shift_id"]
+                )
+            ]
 
             # Weekly hour limit filter
             candidate_employees = [

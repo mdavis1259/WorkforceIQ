@@ -183,10 +183,7 @@ class AvailabilityService:
             employee_id, shift_id, workday_id, availability
         )
 
-    def is_employee_available(self, employee_id, schedule_date, shift_id):
-        # Get day of the week from schedule_date
-        workday_id = schedule_date.weekday() + 1
-
+    def is_employee_available(self, employee_id, workday_id, shift_id):
         availability_row = self.availability_repository.get_matching_availability(employee_id, workday_id, shift_id)
         if availability_row is None:
             return False
