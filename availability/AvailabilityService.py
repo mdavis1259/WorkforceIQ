@@ -64,7 +64,7 @@ class AvailabilityService:
                         'startTime': as_calendar_time(shift['start_time']),
                         'endTime': as_calendar_time(shift['end_time']),
                         'daysOfWeek': [0 if workday_id == 7 else workday_id],
-                        'availability': 1,
+                        'availability': 2,
                         'color': 'gray',
                     })
 
@@ -79,7 +79,7 @@ class AvailabilityService:
                                                                                            item['shift_id'],
                                                                                            item['availability'])),
                 'availability': item['availability'],
-                'color': 'green' if item['availability'] == 0 else 'gray' if item['availability'] == 1 else 'red',
+                'color': 'green' if item['availability'] == 1 else 'gray' if item['availability'] == 2 else 'red',
             })
 
         return formatted_data
@@ -187,5 +187,5 @@ class AvailabilityService:
         availability_row = self.availability_repository.get_matching_availability(employee_id, workday_id, shift_id)
         if availability_row is None:
             return False
-        return availability_row['availability'] == 0
+        return availability_row['availability'] == 1
     

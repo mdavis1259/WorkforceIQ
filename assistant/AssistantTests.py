@@ -27,12 +27,12 @@ EMPLOYEES = [emp(1, "Ana", "Ruiz", 1, [10]), emp(2, "Ben", "Lee", 2),
              emp(3, "Cy", "Fox", 1), emp(4, "Di", "Old", 1, active=False),
              emp(5, "Eli", "Gray", 1)]
 AVAIL = [
-    {"employee_id": 1, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
-    {"employee_id": 2, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
-    {"employee_id": 3, "shift_id": 3, "shift_name": "Evening Shift", "availability": 2},
-    {"employee_id": 4, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
-    {"employee_id": 5, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
-    {"employee_id": 1, "shift_id": 1, "shift_name": "Morning Shift", "availability": 0},
+    {"employee_id": 1, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
+    {"employee_id": 2, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
+    {"employee_id": 3, "shift_id": 3, "shift_name": "Evening Shift", "availability": 0},
+    {"employee_id": 4, "shift_id": 3, "shift_name": "Evening Shift", "availability": 1},
+    {"employee_id": 5, "shift_id": 3, "shift_name": "Evening Shift", "availability": 2},
+    {"employee_id": 1, "shift_id": 1, "shift_name": "Morning Shift", "availability": 1},
 ]
 
 

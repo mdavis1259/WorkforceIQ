@@ -209,7 +209,7 @@ cursor.execute("""
         employee_id INTEGER NOT NULL,
         shift_id INTEGER NOT NULL,
         workday_id INTEGER NOT NULL,
-        availability INTEGER NOT NULL DEFAULT 1,
+        availability INTEGER NOT NULL DEFAULT 2,
 
         CONSTRAINT fk_employee_id
             FOREIGN KEY (employee_id)
@@ -490,7 +490,7 @@ for (
 # cursor.execute(
 #     """
 #     INSERT INTO EmployeeAvailability (employee_id, workday_id, shift_id, availability)
-#     SELECT e.employee_id, w.workday_id, s.shift_id, 1
+#     SELECT e.employee_id, w.workday_id, s.shift_id, 2
 #     FROM Employees AS e
 #     CROSS JOIN Workdays AS w
 #     CROSS JOIN Shifts AS s

@@ -117,7 +117,7 @@ class WorkforceIQTestCase(unittest.TestCase):
                 employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 employee_id INTEGER NOT NULL,
                 shift_id INTEGER NOT NULL,
-                availability INTEGER NOT NULL DEFAULT 1,
+                availability INTEGER NOT NULL DEFAULT 2,
                 FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
                 FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id)
             );

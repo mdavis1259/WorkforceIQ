@@ -58,14 +58,14 @@
         let closeModalButton = document.getElementById('closeModalBtn');
         let selectedEvent = null;
         let originalAvailability = null;
-        let selectedAvailability = 0;
+        let selectedAvailability = 2;
 
         function setAvailability(availability) {
             selectedAvailability = availability;
-            availableButton.setAttribute('aria-pressed', availability === 0);
-            busyButton.setAttribute('aria-pressed', availability === 2);
-            availableButton.classList.toggle('is-selected', availability === 0);
-            busyButton.classList.toggle('is-selected', availability === 2);
+            availableButton.setAttribute('aria-pressed', availability === 1);
+            busyButton.setAttribute('aria-pressed', availability === 0);
+            availableButton.classList.toggle('is-selected', availability === 1);
+            busyButton.classList.toggle('is-selected', availability === 0);
         }
 
         function updateModalButton() {
@@ -74,7 +74,7 @@
 
         [availableButton, busyButton].forEach(button => {
             button.addEventListener('click', function() {
-                setAvailability(button === availableButton ? 0 : 2);
+                setAvailability(button === availableButton ? 1 : 0);
                 updateModalButton();
             });
         });
@@ -91,8 +91,8 @@
             };
             const availability = selectedAvailability;
 
-            if (availability !== 1) {
-                event.setProp('color', availability === 0 ? 'green' : 'red');
+            if (availability !== 2) {
+                event.setProp('color', availability === 1 ? 'green' : 'red');
             }
             event.setExtendedProp('availability', availability);
 

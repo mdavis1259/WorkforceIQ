@@ -112,7 +112,7 @@ class SchedulingTests(unittest.TestCase):
                 employee_id INTEGER NOT NULL,
                 shift_id INTEGER NOT NULL,
                 workday_id INTEGER NOT NULL,
-                availability INTEGER NOT NULL DEFAULT 1,
+                availability INTEGER NOT NULL DEFAULT 2,
                 FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
                 FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
                 FOREIGN KEY (workday_id) REFERENCES Workdays(workday_id),
@@ -220,7 +220,7 @@ class SchedulingTests(unittest.TestCase):
         conn.execute(
             """
             INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability)
-            VALUES (101, 1, 1, 0)
+            VALUES (101, 1, 1, 1)
             """
         )
 
@@ -799,7 +799,7 @@ class SchedulingTests(unittest.TestCase):
 
         try:
             conn.execute(
-                "UPDATE EmployeeAvailability SET availability = 2 "
+                "UPDATE EmployeeAvailability SET availability = 0 "
                 "WHERE employee_id = 101 AND shift_id = 1 AND workday_id = 1"
             )
             conn.commit()
@@ -967,7 +967,7 @@ class SchedulingTests(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability)
-                VALUES (101, 2, 1, 0)
+                VALUES (101, 2, 1, 1)
                 """
             )
             conn.commit()

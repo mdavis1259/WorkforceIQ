@@ -101,7 +101,7 @@ class AvailabilityTests(unittest.TestCase):
                 employee_id INTEGER NOT NULL,
                 shift_id INTEGER NOT NULL,
                 workday_id INTEGER NOT NULL,
-                availability INTEGER NOT NULL DEFAULT 1,
+                availability INTEGER NOT NULL DEFAULT 2,
                 FOREIGN KEY (employee_id) REFERENCES Employees(employee_id),
                 FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
                 FOREIGN KEY (workday_id) REFERENCES Workdays(workday_id),
@@ -167,7 +167,7 @@ class AvailabilityTests(unittest.TestCase):
                 employee_availability_id, employee_id, shift_id, workday_id, availability
             ) VALUES (?, ?, ?, ?, ?)
             """,
-            [(1, 101, 1, 2, 1), (2, 202, 2, 2, 0)],
+            [(1, 101, 1, 2, 2), (2, 202, 2, 2, 1)],
         )
         connection.commit()
         connection.close()
@@ -218,7 +218,7 @@ class AvailabilityTests(unittest.TestCase):
             "end": "2026-11-23T12:00:00Z",
             "start_timezone_offset": 0,
             "end_timezone_offset": 0,
-            "availability": 0,
+            "availability": 1,
         }
         data.update(overrides)
         return data
@@ -287,7 +287,7 @@ class AvailabilityTests(unittest.TestCase):
     def test_create_availability_inserts_using_shift_and_workday_ids(self):
         service, _ = self.get_service()
 
-        availability_id = service.create_availability(101, 1, 1, 0)
+        availability_id = service.create_availability(101, 1, 1, 1)
 
         self.assertEqual(availability_id, 3)
         self.assertEqual(
@@ -298,7 +298,7 @@ class AvailabilityTests(unittest.TestCase):
                 """,
                 (availability_id,),
             ),
-            [(101, 1, 1, 0)],
+            [(101, 1, 1, 1)],
         )
 
     def test_create_availability_updates_a_matching_employee_shift_and_day(self):
@@ -345,7 +345,7 @@ class AvailabilityTests(unittest.TestCase):
                 "startTime": "08:00",
                 "endTime": "12:00",
                 "daysOfWeek": [2],
-                "availability": 1,
+                "availability": 2,
                 "color": "gray",
             },
         )
@@ -356,7 +356,7 @@ class AvailabilityTests(unittest.TestCase):
                 "startTime": "08:00",
                 "endTime": "12:00",
                 "daysOfWeek": [0],
-                "availability": 1,
+                "availability": 2,
                 "color": "gray",
             },
             events,
@@ -378,7 +378,7 @@ class AvailabilityTests(unittest.TestCase):
                 """,
                 (availability_id,),
             ),
-            [(101, 1, 1, 0)],
+            [(101, 1, 1, 1)],
         )
 
     def test_update_availability_updates_only_the_matching_record(self):
@@ -589,7 +589,7 @@ class AvailabilityTests(unittest.TestCase):
                 "SELECT availability FROM EmployeeAvailability "
                 "WHERE employee_availability_id = 2"
             ),
-            [(0,)],
+            [(1,)],
         )
 
     def test_routes_close_connections_after_success_redirect_and_error(self):

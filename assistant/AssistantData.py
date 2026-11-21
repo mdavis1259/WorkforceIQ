@@ -31,7 +31,7 @@ class AssistantData:
 
     def available_employee_ids(self, shift_id):
         return {row["employee_id"] for row in self._availability()
-                if row["shift_id"] == shift_id and row["availability"] == 0}
+                if row["shift_id"] == shift_id and row["availability"] == 1}
 
 
 def build_default_data():
