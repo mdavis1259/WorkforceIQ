@@ -39,19 +39,22 @@ def build_default_data():
     from database.connection import get_db_connection
     from employee_management.EmployeeRepository import EmployeeRepository
     from employee_management.EmployeeService import EmployeeService
-    from availability.AvailabilityRepository import get_availability
-
+    from availability.AvailabilityRepository import AvailabilityRepository
+    from availability.AvailabilityService import AvailabilityService
+    
     def with_service(call):
         connection = get_db_connection()
         try:
-            return call(EmployeeService(EmployeeRepository(connection)))
+            employee_service = EmployeeService(EmployeeRepository(connection))
+            availability_service = AvailabilityService(AvailabilityRepository(connection), employee_service)
+            return call(employee_service, availability_service)
         finally:
             connection.close()
 
     return AssistantData(
-        load_employees=lambda: with_service(lambda s: s.list_employees()),
-        load_roles=lambda: with_service(lambda s: s.list_roles()),
+        load_employees=lambda: with_service(lambda es, _: es.list_employees()),
+        load_roles=lambda: with_service(lambda es, _: es.list_roles()),
         load_qualifications=lambda: with_service(
-            lambda s: s.list_qualifications()),
-        load_availability=lambda: [dict(r) for r in get_availability()],
+            lambda es, _: es.list_qualifications()),
+        load_availability=lambda: with_service(lambda _, avs: avs.get_availability()),
     )

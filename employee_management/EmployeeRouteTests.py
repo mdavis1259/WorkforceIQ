@@ -47,7 +47,8 @@ CREATE TABLE Users(
     password TEXT NOT NULL,
     system_role_id INTEGER NOT NULL DEFAULT 0,
     employee_id INTEGER NOT NULL,
-    active INTEGER NOT NULL DEFAULT 1);
+    active INTEGER NOT NULL DEFAULT 1,
+    force_password_reset INTEGER NOT NULL DEFAULT 1);
 
 INSERT INTO SystemRoles VALUES
     (0, 'Unregistered', ''), (1, 'Associate', ''),
@@ -85,8 +86,8 @@ class RouteTestCase(unittest.TestCase):
         connection = sqlite3.connect(self.database_path)
         connection.executescript(SCHEMA)
         connection.executemany(
-            "INSERT INTO Users (username, password, system_role_id, employee_id) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO Users (username, password, system_role_id, employee_id, "
+            "force_password_reset) VALUES (?, ?, ?, ?, 0)",
             [("admin", PASSWORD_HASH, 3, 1),
              ("manager", PASSWORD_HASH, 2, 2),
              ("assoc", PASSWORD_HASH, 1, 3)],

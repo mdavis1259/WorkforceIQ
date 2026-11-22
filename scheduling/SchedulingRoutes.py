@@ -14,6 +14,8 @@ from scheduling.SchedulingRepository import SchedulingRepository
 from scheduling.SchedulingService import SchedulingService
 from forecasting.ForecastRepository import ForecastRepository
 from forecasting.ForecastService import ForecastService
+from availability.AvailabilityRepository import AvailabilityRepository
+from availability.AvailabilityService import AvailabilityService
 
 
 scheduling_bp = Blueprint(
@@ -34,11 +36,14 @@ def _build_scheduling_service():
 
     employee_service = EmployeeService(employee_repository)
     forecasting_service = ForecastService(forecasting_repository)
+    availability_repository = AvailabilityRepository(conn)
+    availability_service = AvailabilityService(availability_repository, employee_service)
 
     service = SchedulingService(
         scheduling_repository,
         employee_service,
-        forecasting_service
+        forecasting_service,
+        availability_service
     ) 
 
     return service, conn
