@@ -5,6 +5,7 @@ from forecasting.ForecastRepository import ForecastRepository
 from forecasting.ForecastService import ForecastService
 from dataclasses import asdict
 
+
 forecasting_bp = Blueprint(
     "forecast",
     __name__,
@@ -131,6 +132,7 @@ def approve_forecast():
 )
 @login_required
 def submit_historical_data():
+    """ Allows the user to upload historical data in CSV format (Future Release Feature)"""
     pass
 
 @forecasting_bp.route(

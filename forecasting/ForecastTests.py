@@ -16,7 +16,7 @@ Tests verify:
 import unittest
 from dataclasses import fields
 from forecasting.ForecastService import ForecastService
-
+from errors import InsufficientHistoryError
 
 class MockForecastRepository:
     """
@@ -240,6 +240,17 @@ class ForecastServiceTests(unittest.TestCase):
             14
         )
 
+    def test_insufficient_history_raises_error(self):
+        class MockForecastRepository:
+            def get_demand_history(self):
+                return [{ "sales_amount": 4500}] * 10
+
+        service = ForecastService(MockForecastRepository())
+
+        with self.assertRaises(
+            InsufficientHistoryError
+        ):
+            service.generate_draft_forecast()
 
 if __name__ == "__main__":
     unittest.main()
