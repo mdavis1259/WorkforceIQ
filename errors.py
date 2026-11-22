@@ -6,6 +6,7 @@ Routes (blueprints) turn these into the HTTP errors in SDS section 8.8:
 """
 
 
+
 class NotFoundError(Exception):
     """A requested record does not exist."""
 
@@ -24,4 +25,13 @@ class ValidationError(Exception):
 
 class InsufficientHistoryError(Exception):
     """Forecasting has fewer than 8 weeks of historical data."""
-    pass
+
+    def __init__(self, details=None):
+        super().__init__("Not enough data to process the request.")
+
+        self.error = True
+        self.code = "INSUFFICIENT_HISTORY"
+        self.message = "Not enough data to process the request."
+        self.details = details or {}
+
+        
