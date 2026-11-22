@@ -145,21 +145,17 @@ class WorkforceIQTestCase(unittest.TestCase):
             ],
         )
 
+        demand_history = []
+
+        for i in range(56):
+            demand_history.append((f"2026-09-{(i % 30) + 1:02d}", 4500 + (i * 10)))
+
         connection.executemany(
         """
         INSERT INTO DemandHistory
         (demand_date, sales_amount)
         VALUES (?, ?)
-        """,
-        [
-            ("2026-11-01", 4500),
-            ("2026-11-02", 4700),
-            ("2026-11-03", 6200),
-            ("2026-11-04", 5900),
-            ("2026-11-05", 4600),
-            ("2026-11-06", 4550),
-            ("2026-11-07", 4800),
-        ]
+        """, demand_history
     )
 
         # The "test" login belongs to Bob (an Associate)
