@@ -1,15 +1,22 @@
-from flask import (render_template, redirect, request, url_for, Blueprint)
+from flask import (jsonify, render_template, redirect, request, url_for, Blueprint)
 from flask_login import login_required
 from database.connection import get_db_connection
 from forecasting.ForecastRepository import ForecastRepository
 from forecasting.ForecastService import ForecastService
-
+from dataclasses import asdict
 
 forecasting_bp = Blueprint(
     "forecast",
     __name__,
     template_folder="templates"
 )
+
+def _build_forecast_service():
+    conn = get_db_connection()
+    repository = ForecastRepository(conn)
+    service = ForecastService(repository)
+
+    return service, conn
 
 @forecasting_bp.route("/forecast", methods=["GET", "POST"])
 @login_required
@@ -18,11 +25,7 @@ def forecast():
     conn = None
 
     try:
-        conn = get_db_connection()
-
-        repository = ForecastRepository(conn)
-
-        service = ForecastService(repository)
+        service, conn = _build_forecast_service()
 
         forecasts = []
 
@@ -49,12 +52,10 @@ def forecast():
 @login_required
 def update_forecast():
 
-    conn = get_db_connection()
+    conn = None
 
     try:
-
-        repository = ForecastRepository(conn)
-        service = ForecastService(repository)
+        service, conn = _build_forecast_service()
 
         forecast_id = int(
             request.form["forecast_id"]
@@ -85,24 +86,22 @@ def recalculate_forecast():
 
     print(request.form)
 
-    labor_percent = float(request.form["labor_percent"])
+    labor_target_percent = float(request.form["labor_target_percent"])
 
     uncertainty = float(request.form["uncertainty"])
 
-    conn = get_db_connection()
+    conn = None
 
     try:
+        service, conn = _build_forecast_service()
 
-        repository = ForecastRepository(conn)
+        service.update_draft_forecasts(labor_target_percent=labor_target_percent, uncertainty=uncertainty)
 
-        service = ForecastService(repository)
-
-        service.update_draft_forecasts(labor_percent=labor_percent, uncertainty=uncertainty)
-
-        service.generate_draft_forecast(labor_percent=labor_percent, uncertainty=uncertainty)
+        service.generate_draft_forecast(labor_target_percent=labor_target_percent, uncertainty=uncertainty)
 
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
     return redirect(url_for("forecast.forecast"))
 
@@ -113,18 +112,17 @@ def recalculate_forecast():
 @login_required
 def approve_forecast():
 
-    conn = get_db_connection()
+    conn = None
 
     try:
-
-        repository = ForecastRepository(conn)
-        service = ForecastService(repository)
-
+        service, conn = _build_forecast_service()
+        
         forecast_id = int(request.form["forecast_id"])
 
         service.approve_forecast(forecast_id)
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
     return redirect(url_for("forecast.forecast"))
 
@@ -139,8 +137,22 @@ def submit_historical_data():
     "/api/forecasts/generate", methods=["POST"]
 )
 @login_required
-def generate_forecast():
-    pass
+def generate_forecast_api():
+    conn = None
+
+    try:
+        service, conn = _build_forecast_service()
+
+        forecasts = service.generate(request.get_json())
+
+        return jsonify([
+            asdict(forecast)
+            for forecast in forecasts
+        ]), 201
+
+    finally:
+        if conn:
+            conn.close()
 
 @forecasting_bp.route(
     "/api/forecasts", methods=["GET"]
@@ -148,7 +160,21 @@ def generate_forecast():
 @login_required
 def get_forecasts():
 
-    from_date = request.args.get("from")
-    to_date = request.args.get("to")
+    conn = None
 
-    
+    try:
+        service, conn = _build_forecast_service()
+
+        start_date = request.args.get("from")
+        end_date = request.args.get("to")
+
+        forecasts = service.get_range(start_date, end_date)
+
+        return jsonify([
+            asdict(forecast)
+            for forecast in forecasts
+        ]), 200
+
+    finally:
+        if conn:
+            conn.close()
