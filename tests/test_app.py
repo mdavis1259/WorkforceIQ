@@ -383,13 +383,14 @@ class WorkforceIQTestCase(unittest.TestCase):
         connection.close()
         self.assertEqual(count, 0)
 
-    def test_forecast_page_loads_for_authenticated_user(self):
+    def test_forecast_page_loads_for_authenticated_manager(self):
         """
         Verify that the forecast page renders
-        for authenticated users.
+        for authenticated managers.
         """
 
         self.login_as_test_user()
+        self.set_test_user_role(2)
 
         response = self.client.get("/forecast")
 
@@ -400,6 +401,15 @@ class WorkforceIQTestCase(unittest.TestCase):
             response.data
         )
 
+    def test_associate_cannot_access_forecast_page(self):
+
+        self.login_as_test_user()
+        self.set_test_user_role(1)
+
+        response = self.client.get("/forecast")
+
+        self.assertEqual(response.status_code, 403)
+
     def test_forecast_page_contains_labor_budget(self):
         """
         Verify that labor budget information
@@ -407,6 +417,7 @@ class WorkforceIQTestCase(unittest.TestCase):
         """
 
         self.login_as_test_user()
+        self.set_test_user_role(2)
 
         response = self.client.get("/forecast")
 
@@ -420,13 +431,18 @@ class WorkforceIQTestCase(unittest.TestCase):
     def test_generate_forecast_api(self):
         self.login_as_test_user()
         self.set_test_user_role(2) # Manager
+
+        with self.client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+
         response = self.client.post(
             "/api/forecasts/generate",
             json={
                 "horizon_days": 14,
                 "sales_per_labor_hour_goal": 55.0,
                 "labor_target_percent": 18.0
-            }
+            },
+            headers={ "X-CSRF-Token": "test-token" }
         )
 
         self.assertEqual(response.status_code, 201)
@@ -439,13 +455,17 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.login_as_test_user()
         self.set_test_user_role(2)
 
+        with self.client.session_transaction() as sess:
+            sess["csrf_token"] = "test-token"
+
         self.client.post(
             "/api/forecasts/generate",
             json={
                 "horizon_days": 14,
                 "sales_per_labor_hour_goal": 55.0,
                 "labor_target_percent": 18.0
-            }
+            },
+            headers={ "X-CSRF-Token": "test-token"}
         )
 
         response = self.client.get("/api/forecasts?from=2026-11-01&to=2026-12-31")
