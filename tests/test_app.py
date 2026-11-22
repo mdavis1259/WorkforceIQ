@@ -416,6 +416,45 @@ class WorkforceIQTestCase(unittest.TestCase):
             b"Projected Labor Budget",
             response.data
         )
+
+    def test_generate_forecast_api(self):
+        self.login_as_test_user()
+        self.set_test_user_role(2) # Manager
+        response = self.client.post(
+            "/api/forecasts/generate",
+            json={
+                "horizon_days": 14,
+                "sales_per_labor_hour_goal": 55.0,
+                "labor_target_percent": 18.0
+            }
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+        data = response.get_json()
+
+        self.assertEqual(len(data), 14)
+
+    def test_get_forecasts_api(self):
+        self.login_as_test_user()
+        self.set_test_user_role(2)
+
+        self.client.post(
+            "/api/forecasts/generate",
+            json={
+                "horizon_days": 14,
+                "sales_per_labor_hour_goal": 55.0,
+                "labor_target_percent": 18.0
+            }
+        )
+
+        response = self.client.get("/api/forecasts?from=2026-11-01&to=2026-12-31")
+
+        self.assertEqual(response.status_code, 200)
+
+        data = response.get_json()
+
+        self.assertGreater(len(data), 0)
     
 if __name__ == "__main__":
     unittest.main()
