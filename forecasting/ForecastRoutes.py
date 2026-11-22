@@ -30,11 +30,11 @@ def forecast():
             
             week_start = request.form["week_start"]
 
-            forecasts = service.generate_two_week_forecast(week_start)
+            forecasts = service.generate_forecast(week_start)
 
         else:
 
-            forecasts = service.generate_two_week_forecast()
+            forecasts = service.generate_forecast()
 
     finally:
         if conn:
@@ -127,3 +127,28 @@ def approve_forecast():
         conn.close()
 
     return redirect(url_for("forecast.forecast"))
+
+@forecasting_bp.route(
+    "/api/forecasts/submit", methods=["POST"]
+)
+@login_required
+def submit_historical_data():
+    pass
+
+@forecasting_bp.route(
+    "/api/forecasts/generate", methods=["POST"]
+)
+@login_required
+def generate_forecast():
+    pass
+
+@forecasting_bp.route(
+    "/api/forecasts", methods=["GET"]
+)
+@login_required
+def get_forecasts():
+
+    from_date = request.args.get("from")
+    to_date = request.args.get("to")
+
+    

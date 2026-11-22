@@ -14,7 +14,7 @@ Tests verify:
 """
 
 import unittest
-
+from dataclasses import fields
 from forecasting.ForecastService import ForecastService
 
 
@@ -28,18 +28,12 @@ class MockForecastRepository:
         self.saved_forecasts = []
 
     def get_demand_history(self):
-        return [
-            {"sales_amount": 4500},
-            {"sales_amount": 4700},
-            {"sales_amount": 6200},
-            {"sales_amount": 5900},
-            {"sales_amount": 4600},
-            {"sales_amount": 4550},
-            {"sales_amount": 4800},
-            {"sales_amount": 4650},
-            {"sales_amount": 4850},
-            {"sales_amount": 6400},
-        ]
+        history = []
+
+        for i in range(56):
+            history.append({ "sales_amount": 4500 + (i * 10) })
+
+        return history
 
     def clear_forecasts(self):
         self.saved_forecasts = []
@@ -94,9 +88,8 @@ class ForecastServiceTests(unittest.TestCase):
 
         forecasts = self.service.generate_draft_forecast()
 
-        self.assertIn(
-            "forecast_date",
-            forecasts[0]
+        self.assertTrue(
+            hasattr(forecasts[0], "forecast_date")
         )
 
     def test_forecast_contains_projected_sales(self):
@@ -107,9 +100,8 @@ class ForecastServiceTests(unittest.TestCase):
 
         forecasts = self.service.generate_draft_forecast()
 
-        self.assertIn(
-            "projected_sales",
-            forecasts[0]
+        self.assertTrue(
+            hasattr(forecasts[0], "projected_sales")
         )
 
     def test_forecast_contains_uncertainty_values(self):
@@ -120,14 +112,12 @@ class ForecastServiceTests(unittest.TestCase):
 
         forecasts = self.service.generate_draft_forecast()
 
-        self.assertIn(
-            "projected_sales_low",
-            forecasts[0]
+        self.assertTrue(
+            hasattr(forecasts[0], "projected_sales_low")
         )
 
-        self.assertIn(
-            "projected_sales_high",
-            forecasts[0]
+        self.assertTrue(
+            hasattr(forecasts[0], "projected_sales_high")
         )
 
     def test_low_estimate_is_less_than_prediction(self):
@@ -139,8 +129,8 @@ class ForecastServiceTests(unittest.TestCase):
         forecasts = self.service.generate_draft_forecast()
 
         self.assertLess(
-            forecasts[0]["projected_sales_low"],
-            forecasts[0]["projected_sales"]
+            forecasts[0].projected_sales_low,
+            forecasts[0].projected_sales
         )
 
     def test_high_estimate_is_greater_than_prediction(self):
@@ -152,8 +142,8 @@ class ForecastServiceTests(unittest.TestCase):
         forecasts = self.service.generate_draft_forecast()
 
         self.assertGreater(
-            forecasts[0]["projected_sales_high"],
-            forecasts[0]["projected_sales"]
+            forecasts[0].projected_sales_high,
+            forecasts[0].projected_sales
         )
 
     def test_forecast_contains_labor_budget(self):
@@ -164,9 +154,8 @@ class ForecastServiceTests(unittest.TestCase):
 
         forecasts = self.service.generate_draft_forecast()
 
-        self.assertIn(
-            "labor_budget",
-            forecasts[0]
+        self.assertTrue(
+            hasattr(forecasts[0], "labor_budget")
         )
 
     def test_labor_budget_is_positive(self):
@@ -178,7 +167,7 @@ class ForecastServiceTests(unittest.TestCase):
         forecasts = self.service.generate_draft_forecast()
 
         self.assertGreater(
-            forecasts[0]["labor_budget"],
+            forecasts[0].labor_budget,
             0
         )
 
@@ -201,11 +190,12 @@ class ForecastServiceTests(unittest.TestCase):
 
         for forecast in forecasts:
 
-            self.assertTrue(
-                required_fields.issubset(
-                    forecast.keys()
-                )
-            )
+            forecast_fields = {
+                field.name
+                for field in fields(forecast)
+            }
+
+            self.assertTrue(required_fields.issubset(forecast_fields))
 
     def test_forecasts_are_persisted(self):
 
@@ -215,15 +205,12 @@ class ForecastServiceTests(unittest.TestCase):
                 self.saved = []
 
             def get_demand_history(self):
-                return [
-                    {"sales_amount": 4500},
-                    {"sales_amount": 4700},
-                    {"sales_amount": 6200},
-                    {"sales_amount": 5900},
-                    {"sales_amount": 4600},
-                    {"sales_amount": 4550},
-                    {"sales_amount": 4800},
-                ]
+                history = []
+
+                for i in range(56):
+                    history.append({ "sales_amount": 4500 + (i * 10) })
+
+                return history
 
             def clear_forecasts(self):
                 self.saved = []
