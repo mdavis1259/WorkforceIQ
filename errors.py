@@ -21,3 +21,7 @@ class ValidationError(Exception):
         self.details = list(details)
         message = "; ".join(f"{d['field']}: {d['issue']}" for d in self.details)
         super().__init__(message or "Validation failed.")
+
+class InsufficientHistoryError(Exception):
+    """Forecasting has fewer than 8 weeks of historical data."""
+    pass
