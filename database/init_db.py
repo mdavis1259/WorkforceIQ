@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS Shifts(
     shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
     shift_name TEXT NOT NULL,
     start_time TIME NOT NULL,
-    end_time TIME NOT NULL
+    end_time TIME NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
 )
 """)
 
@@ -222,6 +223,11 @@ cursor.execute("""
             REFERENCES Workdays(workday_id),
         CONSTRAINT chk_availability
             CHECK (availability IN (0, 1, 2))
+        UNIQUE(
+            employee_id,
+            shift_id,
+            workday_id
+        )
     )
 """)
 
@@ -229,8 +235,8 @@ cursor.execute("""
     CREATE TABLE IF NOT EXISTS TimeOffRequests(
         request_id INTEGER PRIMARY KEY AUTOINCREMENT,
         employee_id INTEGER NOT NULL,
-        start_date TEXT NOT NULL,
-        end_date TEXT NOT NULL,
+        start_date TIME NOT NULL,
+        end_date TIME NOT NULL,
         status TEXT NOT NULL DEFAULT 'Pending',
         
         CONSTRAINT fk_for_employee
@@ -243,9 +249,16 @@ cursor.execute("""
                     'Pending',
                     'Approved',
                     'Denied',
+                    'Viewed',
                     'Cancelled'
                 )
             )
+
+        UNIQUE(
+            employee_id,
+            start_date,
+            end_date
+        )
     )
 """)
 
@@ -487,15 +500,32 @@ for (
         required_count
     ))
 
-# cursor.execute(
-#     """
-#     INSERT INTO EmployeeAvailability (employee_id, workday_id, shift_id, availability)
-#     SELECT e.employee_id, w.workday_id, s.shift_id, 2
-#     FROM Employees AS e
-#     CROSS JOIN Workdays AS w
-#     CROSS JOIN Shifts AS s
-#     """
-# )
+cursor.executemany(
+    """
+    INSERT INTO TimeOffRequests(
+        employee_id,
+        start_date,
+        end_date,
+        status
+    )
+    VALUES (?, ?, ?, ?)
+    """, [
+        (1, "2026-11-22", "2026-11-23", 'Denied'),
+        (1, "2026-11-24", "2026-11-25", 'Pending'),
+        (2, "2026-11-24", "2026-11-25", 'Denied'),
+        (2, "2026-11-26", "2026-11-27", 'Approved'),
+        (3, "2026-11-23", "2026-11-24", 'Denied'),
+        (4, "2026-11-25", "2026-11-26", 'Pending'),
+        (5, "2026-11-27", "2026-11-28", 'Approved'),
+        (6, "2026-11-29", "2026-11-30", 'Denied'),
+        (7, "2026-11-30", "2026-12-01", 'Pending'),
+        (7, "2026-12-02", "2026-12-03", 'Approved'),
+        (8, "2026-11-22", "2026-12-23", 'Pending'),
+        (8, "2026-11-24", "2026-11-25", 'Approved'),
+        (9, "2026-11-15", "2026-11-15", 'Pending'),
+        (9, "2026-11-27", "2026-11-28", 'Approved'),
+    ]
+)
 
 conn.commit()
 conn.close()

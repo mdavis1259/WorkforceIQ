@@ -170,73 +170,6 @@ dialog::backdrop {
     background: rgba(0, 0, 0, 0.45);
 }
 
-.availability-field {
-    margin-bottom: 10px;
-}
-
-.availability-field label {
-    display: block;
-    margin-bottom: 4px;
-}
-
-.availability-field input:not([type="checkbox"]) {
-    display: block;
-    width: 100%;
-}
-
-.availability-event-details p {
-    margin: 0 0 10px;
-}
-
-.availability-choice-group {
-    display: flex;
-    gap: 10px;
-}
-
-.availability-choice {
-    padding: 8px 14px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    background: white;
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-}
-
-.availability-choice.is-selected {
-    border-color: transparent;
-    color: white;
-}
-
-#availableButton.is-selected {
-    background: green;
-}
-
-#busyButton.is-selected {
-    background: red;
-}
-
-.availability-modal-actions {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 10px;
-}
-
-.availability-modal-actions button {
-    padding: 8px 14px;
-    border: 0;
-    border-radius: 6px;
-    font: inherit;
-    cursor: pointer;
-}
-
-#closeModalBtn {
-    background: var(--primary);
-    color: white;
-}
-
-
-
 /* ==========================
    BUTTONS
    ========================== */
@@ -418,9 +351,86 @@ tr:hover {
     margin-top: 40px;
 }
 
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+    }
+}
+
 /* ==========================
    AVAILABILITY CALENDAR
    ========================== */
+.availability-dialog {
+    width: min(300px, calc(100vw - 32px));
+    padding: 20px;
+}
+
+.availability-dialog h2 {
+    margin: 0 0 16px;
+    font-size: 1.25rem;
+}
+
+.availability-field {
+    min-width: 0;
+    margin: 0 0 10px;
+    border: 0;
+}
+
+.availability-field legend {
+    margin-bottom: 4px;
+}
+
+.availability-event-details p {
+    margin: 0 0 10px;
+}
+
+.availability-choice-group {
+    display: flex;
+    gap: 10px;
+}
+
+.availability-choice {
+    padding: 8px 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: white;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.availability-choice.is-selected {
+    border-color: transparent;
+    color: white;
+}
+
+#availableButton.is-selected {
+    background: green;
+}
+
+#busyButton.is-selected {
+    background: red;
+}
+
+.availability-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.availability-modal-actions button {
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 6px;
+    font: inherit;
+    cursor: pointer;
+}
+
+#closeModalBtn {
+    background: var(--primary);
+    color: white;
+}
+
 .calendar-wrapper {
     width: 100%;
     max-width: 100%;
@@ -443,34 +453,7 @@ tr:hover {
     gap: 8px;
 }
 
-.add-event-button {
-    position: fixed;
-    top: 50%;
-    right: 24px;
-    z-index: 10;
-    width: auto;
-    padding: 18px 26px;
-    border: 0;
-    border-radius: 8px;
-    background: var(--primary);
-    color: white;
-    font: inherit;
-    font-size: 17px;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: var(--shadow);
-    transform: translateY(-50%);
-}
-
-.add-event-button:hover {
-    background: var(--primary-dark);
-}
-
 @media (max-width: 768px) {
-    .container {
-        padding: 15px;
-    }
-
     .calendar-wrapper {
         padding: 15px;
     }
@@ -483,9 +466,23 @@ tr:hover {
         padding: 0.4em;
         font-size: 0.85em;
     }
+}
 
-    .add-event-button {
-        right: 12px;
-        padding: 16px 20px;
-    }
+.time-off-locked {
+    background-color: red !important;
+    border-color: red !important;
+    cursor: not-allowed;
+}
+
+.time-off-locked .fc-daygrid-event-dot {
+    border-color: red !important;
+}
+
+.fc-bg-event .fc-event-title {
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+.bg-continuation .fc-event-title {
+    display: none;
 }

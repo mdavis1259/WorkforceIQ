@@ -94,7 +94,8 @@ class AvailabilityTests(unittest.TestCase):
                 shift_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 shift_name TEXT NOT NULL,
                 start_time TIME NOT NULL,
-                end_time TIME NOT NULL
+                end_time TIME NOT NULL,
+                active INTEGER NOT NULL DEFAULT 1
             );
             CREATE TABLE EmployeeAvailability(
                 employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,6 +107,14 @@ class AvailabilityTests(unittest.TestCase):
                 FOREIGN KEY (shift_id) REFERENCES Shifts(shift_id),
                 FOREIGN KEY (workday_id) REFERENCES Workdays(workday_id),
                 CHECK (availability IN (0, 1, 2))
+            );
+            CREATE TABLE TimeOffRequests(
+                request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'Pending',
+                FOREIGN KEY (employee_id) REFERENCES Employees(employee_id)
             );
             """
         )
@@ -318,6 +327,54 @@ class AvailabilityTests(unittest.TestCase):
             [(1, 2)],
         )
 
+    def test_repository_filters_availability_by_employee_and_finds_matches(self):
+        service, conn = self.get_service()
+        repository = service.availability_repository
+
+        employee_rows = repository.get_availability_by_employee(101)
+        self.assertEqual([row["employee_availability_id"] for row in employee_rows], [1])
+
+        match = repository.get_matching_availability(101, 2, 1)
+        self.assertEqual(match["employee_availability_id"], 1)
+        self.assertIsNone(repository.get_matching_availability(101, 1, 1))
+
+    def test_repository_returns_active_shifts_and_workdays_only(self):
+        service, conn = self.get_service()
+        repository = service.availability_repository
+
+        conn.execute("UPDATE Shifts SET active = 0 WHERE shift_id = 1")
+        conn.execute("UPDATE Workdays SET active = 0 WHERE workday_id = 2")
+        conn.commit()
+
+        self.assertEqual(
+            [shift["shift_id"] for shift in repository.get_active_shifts()],
+            [2],
+        )
+        self.assertEqual(
+            repository.get_active_workdays(),
+            [1, 3, 4, 5, 6, 7],
+        )
+
+    def test_saved_availability_groups_all_matching_days_for_one_shift(self):
+        service, conn = self.get_service()
+
+        conn.execute(
+            "INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability) "
+            "VALUES (?, ?, ?, ?)",
+            (101, 1, 3, 1),
+        )
+        conn.commit()
+
+        value = service.availability_repository.get_days_with_matching_availability(
+            1, 1, 2
+        )
+        available_days = service.availability_repository.get_days_with_matching_availability(
+            1, 1, 1
+        )
+
+        self.assertEqual(value, "2")
+        self.assertEqual(available_days, "3")
+
     def test_database_rejects_availability_values_outside_the_schema_constraint(self):
         service, _ = self.get_service()
 
@@ -332,8 +389,10 @@ class AvailabilityTests(unittest.TestCase):
     def test_availability_rows_are_converted_to_calendar_events(self):
         service, _ = self.get_service()
 
-        events = service.availability_db_to_events(
-            service.get_employee_availability(101), 101
+        events, _, _ = service.availability_db_to_events(
+            service.get_employee_availability(101),
+            [],
+            101,
         )
         saved_event = next(event for event in events if event["id"] == 1)
 
@@ -360,6 +419,92 @@ class AvailabilityTests(unittest.TestCase):
                 "color": "gray",
             },
             events,
+        )
+
+    def test_time_off_is_converted_to_background_events_and_approved_days(self):
+        service, _ = self.get_service()
+        connection = sqlite3.connect(self.database_path)
+        connection.row_factory = sqlite3.Row
+        connection.executemany(
+            """
+            INSERT INTO TimeOffRequests(
+                employee_id, start_date, end_date, status
+            ) VALUES (?, ?, ?, ?)
+            """,
+            [
+                (101, "2026-11-23", "2026-11-24", "Approved"),
+                (101, "2026-11-25", "2026-11-25", "Pending"),
+                (101, "2026-11-26", "2026-11-26", "Cancelled"),
+                (101, "2026-11-27", "2026-11-27", "Viewed"),
+            ],
+        )
+        connection.commit()
+        connection.close()
+
+        time_off = service.get_time_off_by_employee(101)
+        _, background, approved_days = service.availability_db_to_events(
+            [], time_off, 101
+        )
+
+        self.assertEqual(approved_days, ["2026-11-23", "2026-11-24"])
+        self.assertEqual(
+            [(item["title"], item["start"], item["end"], item["color"])
+             for item in background],
+            [
+                ("Status: Approved", "2026-11-23", "2026-11-25", "red"),
+                ("Status: Pending", "2026-11-25", "2026-11-26", "yellow"),
+            ],
+        )
+
+    def test_time_off_repository_filters_by_employee_and_preserves_all_statuses(self):
+        service, _ = self.get_service()
+        connection = sqlite3.connect(self.database_path)
+        connection.executemany(
+            """
+            INSERT INTO TimeOffRequests(
+                employee_id, start_date, end_date, status
+            ) VALUES (?, ?, ?, ?)
+            """,
+            [
+                (101, "2026-11-23", "2026-11-23", "Approved"),
+                (101, "2026-11-24", "2026-11-24", "Denied"),
+                (202, "2026-11-25", "2026-11-25", "Pending"),
+            ],
+        )
+        connection.commit()
+        connection.close()
+
+        rows = service.get_time_off_by_employee(101)
+
+        self.assertEqual(
+            [(row["employee_id"], row["status"]) for row in rows],
+            [(101, "Approved"), (101, "Denied")],
+        )
+
+    def test_denied_time_off_is_rendered_as_gray_background(self):
+        service, _ = self.get_service()
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            """
+            INSERT INTO TimeOffRequests(
+                employee_id, start_date, end_date, status
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (101, "2026-11-24", "2026-11-25", "Denied"),
+        )
+        connection.commit()
+        connection.close()
+
+        time_off = service.get_time_off_by_employee(101)
+        _, background, approved_days = service.availability_db_to_events(
+            [], time_off, 101
+        )
+
+        self.assertEqual(approved_days, [])
+        self.assertEqual(
+            [(item["title"], item["start"], item["end"], item["color"])
+             for item in background],
+            [("Status: Denied", "2026-11-24", "2026-11-26", "gray")],
         )
 
     def test_update_availability_creates_calendar_event_for_requested_day(self):
@@ -430,6 +575,24 @@ class AvailabilityTests(unittest.TestCase):
         self.assertTrue(service.is_employee_available(202, 2, 2))
         self.assertFalse(service.is_employee_available(101, 2, 1))
         self.assertFalse(service.is_employee_available(101, 2, 2))
+
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            "UPDATE EmployeeAvailability SET availability = 0 "
+            "WHERE employee_id = 202 AND workday_id = 2 AND shift_id = 2"
+        )
+        connection.commit()
+        connection.close()
+        self.assertFalse(service.is_employee_available(202, 2, 2))
+
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            "UPDATE EmployeeAvailability SET availability = 2 "
+            "WHERE employee_id = 202 AND workday_id = 2 AND shift_id = 2"
+        )
+        connection.commit()
+        connection.close()
+        self.assertFalse(service.is_employee_available(202, 2, 2))
 
     def test_update_availability_converts_utc_timestamps_to_local_workday(self):
         connection = sqlite3.connect(self.database_path)
@@ -524,16 +687,49 @@ class AvailabilityTests(unittest.TestCase):
 
         self.assertFalse(service.availability_repository.delete_availability({"id": 999}))
 
+    def test_repository_delete_validates_request_body_and_id(self):
+        service, _ = self.get_service()
+
+        with self.assertRaisesRegex(ValueError, "JSON object"):
+            service.availability_repository.delete_availability(None)
+        with self.assertRaisesRegex(ValueError, "AvailabilityID is required"):
+            service.availability_repository.delete_availability({})
+
+    def test_repository_delete_keeps_shift_used_by_another_availability(self):
+        service, _ = self.get_service()
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            "INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability) "
+            "VALUES (?, ?, ?, ?)",
+            (202, 1, 3, 1),
+        )
+        connection.commit()
+        connection.close()
+
+        repository = service.availability_repository
+
+        self.assertTrue(repository.delete_availability({"id": 1}))
+        self.assertEqual(
+            self.read_rows("SELECT shift_id FROM Shifts WHERE shift_id = 1"),
+            [(1,)],
+        )
+        self.assertEqual(
+            self.read_rows(
+                "SELECT COUNT(*) FROM EmployeeAvailability WHERE shift_id = 1"
+            ),
+            [(1,)],
+        )
+
     def test_availability_page_renders_calendar_events_and_controls(self):
         self.login()
 
         response = self.client.get("/availability")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"title: 'Morning Shift'", response.data)
-        self.assertIn(b"title: 'Evening Shift'", response.data)
-        self.assertIn(b"startTime: '16:00'", response.data)
-        self.assertIn(b"daysOfWeek: [2]", response.data)
+        self.assertIn(b'"title": "Morning Shift"', response.data)
+        self.assertIn(b'"title": "Evening Shift"', response.data)
+        self.assertIn(b'"startTime": "16:00"', response.data)
+        self.assertIn(b'"daysOfWeek": [2]', response.data)
         self.assertIn(b'id="eventTitle"', response.data)
         self.assertIn(b'id="eventTime"', response.data)
         self.assertIn(b'id="availableButton"', response.data)
@@ -617,7 +813,7 @@ class AvailabilityTests(unittest.TestCase):
             )
             with patch.object(
                 AvailabilityService,
-                "get_employee_availability",
+                "get_availability_by_employee",
                 side_effect=RuntimeError("test failure"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "test failure"):

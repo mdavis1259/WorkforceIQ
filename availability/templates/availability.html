@@ -1,106 +1,102 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>WorkforceIQ</title>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <nav class="navbar">
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <span class="navbar-text">Schedule</span>
-        <a href="{{ url_for('availability.availability') if current_user.system_role_id == 1 else url_for('availability.avail_select') }}">Availability</a>
-        <a href="{{ url_for('employee.employees') }}">Employees</a>
-        <span class="navbar-text" {% if current_user.system_role_id != 3 %}hidden=true{% endif %}>Users</span>
-        <a href="{{ url_for('forecast.forecast') }}" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Forecast</a>
-        <span class="navbar-text" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Reports</span>
-        <a href="{{ url_for('assistant.ai_assistant') }}">AI Assistant</a>
-        {% if current_user.is_authenticated %}
-        <span class="navbar-username">{{ current_user.username }}</span>
-        <a href="{{ url_for('auth.logout') }}" class="navbar-logout">Logout</a>
-        {% endif %}
-    </nav>
-    <main class="container">
-        <h1>Availability</h1>
-    <div class="calendar-wrapper dashboard">
-        <div id="calendar" class="availability_calendar"></div>
-    </div>
-    <dialog id="eventModal" style="padding: 20px; border-radius: 8px; border: 1px solid #ccc; width: 300px;">
-        <h3 id="modalHeading" style="margin-top: 0;">Edit availability</h3>
-        <form method="dialog">
-            <div class="availability-event-details">
-                <p><strong>Title:</strong> <span id="eventTitle"></span></p>
-                <p><strong>Time:</strong> <span id="eventTime"></span></p>
-            </div>
-            <div class="availability-field">
-                <label>Availability:</label>
-                <div class="availability-choice-group" role="group" aria-label="Availability">
-                    <button id="availableButton" class="availability-choice" type="button" aria-pressed="false">
-                        Available
-                    </button>
-                    <button id="busyButton" class="availability-choice" type="button" aria-pressed="false">
-                        Busy
-                    </button>
-                </div>
-            </div>
-            <div class="availability-modal-actions">
-                <button id="closeModalBtn" type="submit">Close</button>
-            </div>
-        </form>
-    </dialog>
-    <script>
-        let calendarEl = document.getElementById('calendar');
-        let modal = document.getElementById('eventModal');
-        let eventTitle = document.getElementById('eventTitle');
-        let eventTime = document.getElementById('eventTime');
-        let availableButton = document.getElementById('availableButton');
-        let busyButton = document.getElementById('busyButton');
-        let closeModalButton = document.getElementById('closeModalBtn');
-        let selectedEvent = null;
-        let originalAvailability = null;
-        let selectedAvailability = 2;
+{% extends "base.html" %}
 
-        function setAvailability(availability) {
-            selectedAvailability = availability;
-            availableButton.setAttribute('aria-pressed', availability === 1);
-            busyButton.setAttribute('aria-pressed', availability === 0);
-            availableButton.classList.toggle('is-selected', availability === 1);
-            busyButton.classList.toggle('is-selected', availability === 0);
-        }
+{% block content %}
+<h1>{{ employee.first_name }} {{ employee.last_name }} - Availability</h1>
 
-        function updateModalButton() {
-            closeModalButton.textContent = selectedAvailability !== originalAvailability ? 'Save' : 'Close';
-        }
+<section class="calendar-wrapper" aria-label="Availability calendar">
+    <div id="calendar"></div>
+</section>
 
-        [availableButton, busyButton].forEach(button => {
-            button.addEventListener('click', function() {
-                setAvailability(button === availableButton ? 1 : 0);
-                updateModalButton();
-            });
+<dialog id="eventModal" class="availability-dialog">
+    <h2>Edit availability</h2>
+    <form method="dialog">
+        <div class="availability-event-details">
+            <p><strong>Shift:</strong> <span id="eventTitle"></span></p>
+            <p><strong>Time:</strong> <span id="eventTime"></span></p>
+        </div>
+        <fieldset class="availability-field">
+            <legend>Availability</legend>
+            <div class="availability-choice-group">
+                <button id="availableButton" class="availability-choice" type="button" aria-pressed="false">
+                    Available
+                </button>
+                <button id="busyButton" class="availability-choice" type="button" aria-pressed="false">
+                    Busy
+                </button>
+            </div>
+        </fieldset>
+        <div class="availability-modal-actions">
+            <button id="closeModalBtn" type="submit">Close</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+    const calendarElement = document.getElementById('calendar');
+    const modal = document.getElementById('eventModal');
+    const eventTitle = document.getElementById('eventTitle');
+    const eventTime = document.getElementById('eventTime');
+    const availableButton = document.getElementById('availableButton');
+    const busyButton = document.getElementById('busyButton');
+    const modalActionButton = document.getElementById('closeModalBtn');
+    let selectedEvent = null;
+    let originalAvailability = null;
+    let selectedAvailability = 2;
+
+    const approvedDays = new Set({{ approved_days|tojson }});
+    const backgroundEvents = {{ background|tojson }}.flatMap(event => {
+        const nextDay = new Date(`${event.start}T00:00:00Z`);
+        nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+        const firstDayEnd = nextDay.toISOString().slice(0, 10);
+        const firstDay = { ...event, end: firstDayEnd };
+        return firstDayEnd >= event.end
+            ? [firstDay]
+            : [firstDay, { ...event, start: firstDayEnd, title: '' }];
+    });
+
+    function isApprovedDay(date) {
+        const localDate = [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('-');
+        return approvedDays.has(localDate);
+    }
+
+    function setAvailability(availability) {
+        selectedAvailability = availability;
+        const available = availability === 1;
+        const busy = availability === 0;
+        availableButton.setAttribute('aria-pressed', available);
+        busyButton.setAttribute('aria-pressed', busy);
+        availableButton.classList.toggle('is-selected', available);
+        busyButton.classList.toggle('is-selected', busy);
+        modalActionButton.textContent = availability === originalAvailability ? 'Close' : 'Save';
+    }
+
+    [availableButton, busyButton].forEach(button => {
+        button.addEventListener('click', () => {
+            setAvailability(button === availableButton ? 1 : 0);
         });
-        modal.addEventListener('close', function() {
-            const event = selectedEvent;
-            selectedEvent = null;
-            if (!event || selectedAvailability === originalAvailability) {
-                return;
-            }
+    });
 
-            const previous = {
-                color: event.backgroundColor,
-                availability: event.extendedProps.availability
-            };
-            const availability = selectedAvailability;
+    modal.addEventListener('close', async () => {
+        const event = selectedEvent;
+        selectedEvent = null;
+        if (!event || selectedAvailability === originalAvailability) return;
 
-            if (availability !== 2) {
-                event.setProp('color', availability === 1 ? 'green' : 'red');
-            }
-            event.setExtendedProp('availability', availability);
+        const previous = {
+            color: event.backgroundColor,
+            availability: event.extendedProps.availability
+        };
+        event.setProp('color', selectedAvailability === 1 ? 'green' : 'red');
+        event.setExtendedProp('availability', selectedAvailability);
 
-            fetch('/availability', {
+        try {
+            const response = await fetch('{{ url_for("availability.availability") }}', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: event.id,
                     shift_name: event.title,
@@ -110,74 +106,54 @@
                     end_timezone_offset: event.end.getTimezoneOffset(),
                     availability: selectedAvailability
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    throw new Error('Failed to update event.');
-                }
-                event.setProp('id', String(data.id));
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                event.setProp('color', previous.color);
-                event.setExtendedProp('availability', previous.availability);
-                alert('Failed to save event changes. The event has been reverted.');
             });
-        });
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') {
+                throw new Error(result.message || 'Failed to update availability.');
+            }
+            event.setProp('id', String(result.id));
+        } catch (error) {
+            console.error('Unable to save availability:', error);
+            event.setProp('color', previous.color);
+            event.setExtendedProp('availability', previous.availability);
+            alert('Failed to save event changes. The event has been reverted.');
+        }
+    });
 
-        let calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
-            selectable: true,
-            editable: false,
-            height: 'auto',
-            contentHeight: 'auto',
-            slotDuration: '00:15:00',
-            slotMinTime: '00:00:00',
-            slotMaxTime: '24:00:00',
-            allDaySlot: true,
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek'
-            },
-            events: [
-                {% for event in availability %}
-                {
-                    id: {{ event.id|tojson }},
-                    title: '{{ event.title }}',
-                    startTime: '{{ event.startTime }}',
-                    endTime: '{{ event.endTime }}',
-                    daysOfWeek: {{ event.daysOfWeek|tojson }},
-                    availability: {{ event.availability }},
-                    color: '{{ event.color }}'
-                },
-                {% endfor %}
-            ],
-            eventClick: function(info) {
-                info.jsEvent.preventDefault();
-                selectedEvent = info.event;
-                eventTitle.textContent = info.event.title;
-                const timeOptions = { hour: 'numeric', minute: '2-digit' };
-                const startTime = info.event.start.toLocaleTimeString([], timeOptions);
-                const endTime = info.event.end
-                    ? info.event.end.toLocaleTimeString([], timeOptions)
-                    : '';
-                eventTime.textContent = endTime ? `${startTime} - ${endTime}` : startTime;
-                setAvailability(Number(info.event.extendedProps.availability));
-                originalAvailability = selectedAvailability;
-                updateModalButton();
-                modal.showModal();
-            },
-        });
-        calendar.render();
+    const calendar = new FullCalendar.Calendar(calendarElement, {
+        initialView: 'timeGridWeek',
+        height: 'auto',
+        slotDuration: '00:30:00',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        eventSources: [
+            { events: {{ availability|tojson }} },
+            { events: backgroundEvents }
+        ],
+        eventClassNames: ({ event, isStart }) => {
+            if (event.display === 'background') {
+                return isStart ? [] : ['bg-continuation'];
+            }
+            return event.start && isApprovedDay(event.start) ? ['time-off-locked'] : [];
+        },
+        eventClick: info => {
+            info.jsEvent.preventDefault();
+            if (info.event.start && isApprovedDay(info.event.start)) return;
 
-        window.addEventListener('resize', function () {
-            calendar.updateSize();
-        });
-    </script>
-    </main>
-    <footer class="footer">
-         WorkforceIQ Proof of Concept
-    </footer>
-</body>
+            selectedEvent = info.event;
+            eventTitle.textContent = info.event.title;
+            const options = { hour: 'numeric', minute: '2-digit' };
+            const start = info.event.start.toLocaleTimeString([], options);
+            const end = info.event.end?.toLocaleTimeString([], options);
+            eventTime.textContent = end ? `${start} - ${end}` : start;
+            originalAvailability = Number(info.event.extendedProps.availability);
+            setAvailability(originalAvailability);
+            modal.showModal();
+        }
+    });
+    calendar.render();
+</script>
+{% endblock %}

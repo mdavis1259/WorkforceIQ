@@ -67,6 +67,7 @@ def availability():
         # Used for Availability updates
         if request.method == "POST":
             data = request.get_json()
+            print("In POST with data:", data)
             try:
                 updated = service.update_availability(data, employee_id)
             except ValueError as error:
@@ -76,8 +77,14 @@ def availability():
             return jsonify({"status": "success", "id": updated, "message": "Availability updated successfully"}), 200
         
 
-        avail_events = service.availability_db_to_events(service.get_employee_availability(employee_id), employee_id)
-        return render_template('availability.html', availability=avail_events)
+        avail_events, background_events, approved_days = service.availability_db_to_events(service.get_availability_by_employee(employee_id),
+                                                                           service.get_time_off_by_employee(employee_id),
+                                                                           employee_id)
+        return render_template('availability.html',
+                               availability=avail_events,
+                               background=background_events,
+                               approved_days=approved_days,
+                               employee=service.employee_service.get_employee(employee_id))
     finally:
         conn.close()
 
