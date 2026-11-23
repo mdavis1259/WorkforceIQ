@@ -37,14 +37,9 @@ class ForecastService:
 
             base_date = date.today()
            
-        end_date = (base_date + timedelta(days=horizon_days - 1)).isoformat()
-
-        if hasattr(self.repository, "get_forecast_by_date"):
-            existing_forecast = self.repository.get_forecast_by_date(base_date.isoformat())
-
-            if existing_forecast:
-                return self.repository.get_range(base_date.isoformat(), end_date)
-
+        end_date = (base_date + timedelta(days=horizon_days - 1)).isoformat()            
+        
+        
         history = self.repository.get_demand_history()
 
         if len(history) < 56:
@@ -63,14 +58,19 @@ class ForecastService:
 
         forecasts = []
 
-        for forecast_day in range(
-            len(sales) + 1,
-            len(sales) + horizon_days + 1
-        ):
+        for offset in range(horizon_days):
             forecast_date = (
                 base_date +
-                timedelta(days=len(forecasts))
+                timedelta(days=offset)
             ).isoformat()
+
+            existing = self.repository.get_forecast_by_date(forecast_date)
+
+            if existing:
+                forecasts.append(existing)
+                continue
+
+            forecast_day = len(sales) + offset + 1
             
             prediction = float(
                 model.predict([[forecast_day]])[0]

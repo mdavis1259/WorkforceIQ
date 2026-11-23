@@ -204,6 +204,10 @@ class ForecastServiceTests(unittest.TestCase):
             def __init__(self):
                 self.saved = []
 
+            def get_forecast_by_date(self, forecast_date):
+                return None
+
+
             def get_demand_history(self):
                 history = []
 
