@@ -360,6 +360,20 @@ tr:hover {
 /* ==========================
    AVAILABILITY CALENDAR
    ========================== */
+.availability-new-request {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 10;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--primary);
+    color: white;
+    font: inherit;
+    cursor: pointer;
+}
+
 .availability-dialog {
     width: min(300px, calc(100vw - 32px));
     padding: 20px;
@@ -399,22 +413,23 @@ tr:hover {
     cursor: pointer;
 }
 
-.availability-choice.is-selected {
+.availability-choice[aria-pressed="true"] {
     border-color: transparent;
     color: white;
 }
 
-#availableButton.is-selected {
+#availableButton[aria-pressed="true"] {
     background: green;
 }
 
-#busyButton.is-selected {
+#busyButton[aria-pressed="true"] {
     background: red;
 }
 
 .availability-modal-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
     margin-top: 10px;
 }
 
@@ -485,4 +500,14 @@ tr:hover {
 
 .bg-continuation .fc-event-title {
     display: none;
+}
+
+.time-off-review-background {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.time-off-review-background:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
 }

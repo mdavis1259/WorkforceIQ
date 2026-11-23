@@ -2,8 +2,10 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 
+from flask import template_rendered
 from werkzeug.security import generate_password_hash
 
 from app import app
@@ -421,6 +423,29 @@ class AvailabilityTests(unittest.TestCase):
             events,
         )
 
+    def test_calendar_keeps_each_saved_shift_on_its_own_workday(self):
+        service, conn = self.get_service()
+        conn.executemany(
+            "INSERT INTO EmployeeAvailability(employee_id, shift_id, workday_id, availability) "
+            "VALUES (101, 1, ?, 1)",
+            [(1,), (3,), (7,)],
+        )
+        conn.execute(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) "
+            "VALUES (101, '2026-11-23', '2026-11-29', 'Pending')"
+        )
+        conn.commit()
+        events, _, _ = service.availability_db_to_events(
+            service.get_employee_availability(101), service.get_time_off_by_employee(101), 101
+        )
+        saved = [event for event in events if event["id"] in (3, 4, 5)]
+        self.assertEqual(
+            [(event["id"], event["daysOfWeek"]) for event in saved],
+            [(3, [1]), (4, [3]), (5, [0])],
+        )
+        for day in (0, 1, 3):
+            self.assertEqual(sum(day in event["daysOfWeek"] for event in saved), 1)
+
     def test_time_off_is_converted_to_background_events_and_approved_days(self):
         service, _ = self.get_service()
         connection = sqlite3.connect(self.database_path)
@@ -455,6 +480,378 @@ class AvailabilityTests(unittest.TestCase):
                 ("Status: Pending", "2026-11-25", "2026-11-26", "yellow"),
             ],
         )
+
+    def test_create_time_off_request_persists_pending_background_event(self):
+        self.login()
+        start = date.today()
+        end = start + timedelta(days=1)
+        response = self.client.post(
+            "/api/time-off-requests",
+            json={"start_date": start.isoformat(), "end_date": end.isoformat(), "employee_id": 202},
+        )
+
+        self.assertEqual(response.status_code, 201)
+        event = response.get_json()["event"]
+        self.assertEqual(event, {
+            "id": 1,
+            "title": "Status: Pending",
+            "start": start.isoformat(),
+            "end": (end + timedelta(days=1)).isoformat(),
+            "allDay": True,
+            "display": "background",
+            "color": "yellow",
+        })
+        expected_segments = [
+            {**event, "end": end.isoformat()},
+            {**event, "start": end.isoformat(), "title": ""},
+        ]
+        self.assertEqual(response.get_json()["background_events"], expected_segments)
+        self.assertEqual(
+            self.read_rows("SELECT employee_id, start_date, end_date, status FROM TimeOffRequests"),
+            [(101, start.isoformat(), end.isoformat(), "Pending")],
+        )
+        service, _ = self.get_service()
+        _, background, approved_days = service.availability_db_to_events(
+            [], service.get_time_off_by_employee(101), 101
+        )
+        self.assertEqual(background, [event])
+        self.assertEqual(approved_days, [])
+        rendered = []
+        def capture_template(sender, template, context, **extra):
+            rendered.append(context)
+
+        with template_rendered.connected_to(capture_template, app):
+            page = self.client.get("/availability")
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(rendered[0]["background"], expected_segments)
+
+    def test_create_time_off_request_accepts_one_day(self):
+        self.login()
+        today = date.today()
+        response = self.client.post(
+            "/api/time-off-requests",
+            json={"start_date": today.isoformat(), "end_date": today.isoformat()},
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["event"]["end"], (today + timedelta(days=1)).isoformat())
+        self.assertEqual(response.get_json()["background_events"], [response.get_json()["event"]])
+
+    def test_split_background_event_preserves_segments_across_leap_day_and_year(self):
+        for start, end, next_day in (
+            ("2028-02-28", "2028-03-02", "2028-02-29"),
+            ("2028-12-31", "2029-01-02", "2029-01-01"),
+        ):
+            with self.subTest(start=start):
+                event = {
+                    "id": 5, "title": "Status: Pending", "start": start, "end": end,
+                    "allDay": True, "display": "background", "color": "yellow",
+                }
+                self.assertEqual(
+                    AvailabilityService.split_background_event(event),
+                    [
+                        {**event, "end": next_day},
+                        {**event, "start": next_day, "title": ""},
+                    ],
+                )
+
+    def test_create_time_off_request_rejects_dates_before_today(self):
+        self.login()
+        today = date.today()
+        yesterday = (today - timedelta(days=1)).isoformat()
+        tomorrow = (today + timedelta(days=1)).isoformat()
+        for start, end in (
+            (yesterday, today.isoformat()),
+            (yesterday, yesterday),
+            (tomorrow, yesterday),
+        ):
+            with self.subTest(start=start, end=end):
+                response = self.client.post(
+                    "/api/time-off-requests",
+                    json={"start_date": start, "end_date": end},
+                )
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.get_json()["message"],
+                    "Start Date and End Date must be today or later",
+                )
+        self.assertEqual(self.read_rows("SELECT * FROM TimeOffRequests"), [])
+
+    def test_create_time_off_request_rejects_overlaps_for_non_cancelled_statuses(self):
+        self.login()
+        start = date.today() + timedelta(days=10)
+        end = start + timedelta(days=2)
+        for status in ("Pending", "Approved", "Denied", "Viewed"):
+            connection = sqlite3.connect(self.database_path)
+            connection.execute(
+                "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) "
+                "VALUES (?, ?, ?, ?)",
+                (101, start.isoformat() + "T08:00:00", end.isoformat() + "T17:00:00", status),
+            )
+            connection.commit()
+            connection.close()
+            for requested_start, requested_end in (
+                (start, start),
+                (end, end),
+                (start + timedelta(days=1), start + timedelta(days=1)),
+                (start - timedelta(days=1), end + timedelta(days=1)),
+                (start - timedelta(days=1), start),
+                (end, end + timedelta(days=1)),
+            ):
+                with self.subTest(status=status, start=requested_start, end=requested_end):
+                    response = self.client.post(
+                        "/api/time-off-requests",
+                        json={
+                            "start_date": requested_start.isoformat(),
+                            "end_date": requested_end.isoformat(),
+                        },
+                    )
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response.get_json()["message"], "Dates overlap an existing time-off request")
+            connection = sqlite3.connect(self.database_path)
+            connection.execute("DELETE FROM TimeOffRequests")
+            connection.commit()
+            connection.close()
+
+    def test_time_off_overlap_is_employee_specific_and_adjacent_dates_are_allowed(self):
+        self.login()
+        today = date.today()
+        start = today + timedelta(days=5)
+        end = start + timedelta(days=2)
+        connection = sqlite3.connect(self.database_path)
+        connection.executemany(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) VALUES (?, ?, ?, ?)",
+            [
+                (101, start.isoformat(), end.isoformat(), "Pending"),
+                (202, today.isoformat(), today.isoformat(), "Approved"),
+            ],
+        )
+        connection.commit()
+        connection.close()
+        for day in (today, start - timedelta(days=1), end + timedelta(days=1)):
+            with self.subTest(day=day):
+                response = self.client.post(
+                    "/api/time-off-requests",
+                    json={"start_date": day.isoformat(), "end_date": day.isoformat()},
+                )
+                self.assertEqual(response.status_code, 201)
+
+    def test_time_off_modal_receives_all_existing_ranges(self):
+        self.login()
+        connection = sqlite3.connect(self.database_path)
+        connection.executemany(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) VALUES (?, ?, ?, ?)",
+            [
+                (101, "2035-01-02T08:00:00", "2035-01-03T17:00:00", "Cancelled"),
+                (101, "2035-02-01", "2035-02-02", "Denied"),
+                (202, "2035-03-01", "2035-03-02", "Approved"),
+            ],
+        )
+        connection.commit()
+        connection.close()
+        rendered = []
+
+        def capture_template(sender, template, context, **extra):
+            rendered.append(context)
+
+        with template_rendered.connected_to(capture_template, app):
+            response = self.client.get("/availability")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(rendered[0]["time_off_ranges"], [
+            {"start": "2035-02-01", "end": "2035-02-02"},
+        ])
+
+    def test_time_off_request_can_overlap_cancelled_dates(self):
+        self.login()
+        start = date.today() + timedelta(days=10)
+        end = start + timedelta(days=2)
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) "
+            "VALUES (?, ?, ?, ?)",
+            (101, start.isoformat(), end.isoformat(), "Cancelled"),
+        )
+        connection.commit()
+        connection.close()
+        response = self.client.post(
+            "/api/time-off-requests",
+            json={"start_date": start.isoformat(), "end_date": end.isoformat()},
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(
+            self.read_rows("SELECT status FROM TimeOffRequests ORDER BY request_id"),
+            [("Cancelled",), ("Pending",)],
+        )
+
+    def test_manager_review_returns_request_details(self):
+        connection = sqlite3.connect(self.database_path)
+        connection.execute(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) "
+            "VALUES (101, '2026-11-23', '2026-12-07', 'Pending')"
+        )
+        connection.commit()
+        connection.close()
+        self.login_manager()
+        with self.client.session_transaction() as session_data:
+            session_data["availability_employee"] = 101
+        response = self.client.get("/api/time-off-requests/1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["request"], {
+            "id": 1, "employee_name": "April Example", "start_date": "2026-11-23",
+            "end_date": "2026-12-07", "status": "Pending",
+        })
+
+    def test_review_approve_and_deny_pending_requests(self):
+        connection = sqlite3.connect(self.database_path)
+        connection.executemany(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) "
+            "VALUES (101, ?, ?, 'Pending')",
+            [("2026-11-23", "2026-11-24"), ("2026-12-01", "2026-12-01")],
+        )
+        connection.commit()
+        connection.close()
+        self.login_administrator()
+        with self.client.session_transaction() as session_data:
+            session_data["availability_employee"] = 101
+        approved = self.client.put("/api/time-off-requests/1", json={"status": "Approved"})
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.get_json()["approved_days"], ["2026-11-23", "2026-11-24"])
+        self.assertEqual(approved.get_json()["background_events"][0]["color"], "red")
+        denied = self.client.put("/api/time-off-requests/2", json={"status": "Denied"})
+        self.assertEqual(denied.status_code, 200)
+        self.assertEqual(denied.get_json()["background_events"][0]["color"], "gray")
+        self.assertEqual(
+            self.read_rows("SELECT status FROM TimeOffRequests ORDER BY request_id"),
+            [("Approved",), ("Denied",)],
+        )
+        stale = self.client.put("/api/time-off-requests/1", json={"status": "Denied"})
+        self.assertEqual(stale.status_code, 409)
+
+    def test_review_permissions_invalid_status_and_employee_scope(self):
+        connection = sqlite3.connect(self.database_path)
+        connection.executemany(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) VALUES (?, ?, ?, ?)",
+            [(101, "2026-11-23", "2026-11-23", "Pending"),
+             (202, "2026-11-23", "2026-11-23", "Pending"),
+             (101, "2026-11-24", "2026-11-24", "Denied")],
+        )
+        connection.commit()
+        connection.close()
+        self.assertEqual(self.client.get("/api/time-off-requests/1").status_code, 302)
+        self.login()
+        self.assertEqual(self.client.put("/api/time-off-requests/1", json={"status": "Approved"}).status_code, 403)
+        self.client.get("/logout")
+        self.login_manager()
+        self.assertEqual(self.client.get("/api/time-off-requests/2").status_code, 403)
+        with self.client.session_transaction() as session_data:
+            session_data["availability_employee"] = 101
+        self.assertEqual(self.client.get("/api/time-off-requests/2").status_code, 404)
+        self.assertEqual(self.client.get("/api/time-off-requests/3").status_code, 409)
+        for data in ({}, {"status": "Cancelled"}, None):
+            self.assertEqual(self.client.put("/api/time-off-requests/1", json=data).status_code, 400)
+        self.assertEqual(
+            self.read_rows("SELECT status FROM TimeOffRequests ORDER BY request_id"),
+            [("Pending",), ("Pending",), ("Denied",)],
+        )
+
+    def test_review_controls_only_for_other_employees_pending_requests(self):
+        connection = sqlite3.connect(self.database_path)
+        connection.executemany(
+            "INSERT INTO TimeOffRequests(employee_id, start_date, end_date, status) VALUES (101, ?, ?, ?)",
+            [("2026-11-23", "2026-11-24", "Pending"), ("2026-11-25", "2026-11-25", "Denied")],
+        )
+        connection.commit()
+        connection.close()
+        self.login_manager()
+        self.assertNotIn(b'id="reviewTimeOffModal"', self.client.get("/availability").data)
+        with self.client.session_transaction() as session_data:
+            session_data["availability_employee"] = 101
+        contexts = []
+
+        def capture_template(sender, template, context, **extra):
+            contexts.append(context)
+
+        with template_rendered.connected_to(capture_template, app):
+            response = self.client.get("/availability")
+        self.assertIn(b'id="reviewTimeOffModal"', response.data)
+        self.assertNotIn(b"Review pending time off", response.data)
+        self.assertTrue(all(
+            segment.get("reviewRequestId") == 1
+            for segment in contexts[0]["background"] if segment["id"] == 1
+        ))
+        self.assertTrue(all(
+            "reviewRequestId" not in segment
+            for segment in contexts[0]["background"] if segment["id"] == 2
+        ))
+
+    def test_create_time_off_request_rejects_invalid_dates(self):
+        self.login()
+        for data in (
+            None,
+            [],
+            {},
+            {"start_date": "2026-02-30", "end_date": "2026-03-01"},
+            {"start_date": "20261123", "end_date": "2026-11-24"},
+            {"start_date": "2026-11-25", "end_date": "2026-11-24"},
+            {"start_date": "9999-12-31", "end_date": "9999-12-31"},
+        ):
+            with self.subTest(data=data):
+                response = self.client.post("/api/time-off-requests", json=data)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.get_json()["status"], "error")
+        self.assertEqual(self.read_rows("SELECT * FROM TimeOffRequests"), [])
+
+    def test_time_off_button_is_visible_on_own_availability(self):
+        for login in (self.login, self.login_manager, self.login_administrator):
+            with self.subTest(login=login.__name__):
+                login()
+                response = self.client.get("/availability")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(b'id="newTimeOffButton"', response.data)
+                self.assertIn(b'id="timeOffModal"', response.data)
+                self.client.get("/logout")
+
+    def test_time_off_button_is_hidden_on_another_employees_availability(self):
+        for login in (self.login_manager, self.login_administrator):
+            with self.subTest(login=login.__name__):
+                login()
+                with self.client.session_transaction() as session_data:
+                    session_data["availability_employee"] = 101
+                response = self.client.get("/availability")
+                self.assertEqual(response.status_code, 200)
+                self.assertNotIn(b'id="newTimeOffButton"', response.data)
+                self.assertNotIn(b'id="timeOffModal"', response.data)
+                self.assertIn(b'id="calendar"', response.data)
+                self.client.get("/logout")
+
+    def test_create_time_off_request_uses_selected_employee_for_manager(self):
+        self.login_manager()
+        with self.client.session_transaction() as session_data:
+            session_data["availability_employee"] = 101
+        response = self.client.post(
+            "/api/time-off-requests",
+            json={"start_date": date.today().isoformat(), "end_date": date.today().isoformat()},
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(self.read_rows("SELECT employee_id FROM TimeOffRequests"), [(101,)])
+
+    def test_create_time_off_request_rejects_inaccessible_employee(self):
+        self.login_manager()
+        with self.client.session_transaction() as session_data:
+            session_data["availability_employee"] = 999
+        response = self.client.post(
+            "/api/time-off-requests",
+            json={"start_date": "2026-11-23", "end_date": "2026-11-23"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.read_rows("SELECT * FROM TimeOffRequests"), [])
+
+    def test_create_time_off_request_requires_login(self):
+        response = self.client.post(
+            "/api/time-off-requests",
+            json={"start_date": "2026-11-23", "end_date": "2026-11-23"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.read_rows("SELECT * FROM TimeOffRequests"), [])
 
     def test_time_off_repository_filters_by_employee_and_preserves_all_statuses(self):
         service, _ = self.get_service()

@@ -238,3 +238,38 @@ class AvailabilityRepository:
             (employee_id,)
         )
         return cursor.fetchall()
+
+    def get_time_off_request(self, request_id, employee_id):
+        cursor = self.conn.execute(
+            "SELECT * FROM TimeOffRequests WHERE request_id = ? AND employee_id = ?",
+            (request_id, employee_id),
+        )
+        return cursor.fetchone()
+
+    def update_pending_time_off(self, request_id, employee_id, status):
+        cursor = self.conn.execute(
+            "UPDATE TimeOffRequests SET status = ? "
+            "WHERE request_id = ? AND employee_id = ? AND status = 'Pending'",
+            (status, request_id, employee_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount == 1
+
+    def create_time_off_request(self, employee_id, start_date, end_date):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO TimeOffRequests (employee_id, start_date, end_date)
+            SELECT ?, ?, ?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM TimeOffRequests
+                WHERE employee_id = ?
+                  AND status != 'Cancelled'
+                  AND substr(start_date, 1, 10) <= ?
+                  AND substr(end_date, 1, 10) >= ?
+            )
+            """,
+            (employee_id, start_date, end_date, employee_id, end_date, start_date),
+        )
+        self.conn.commit()
+        return cursor.lastrowid if cursor.rowcount else None

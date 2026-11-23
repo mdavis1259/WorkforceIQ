@@ -74,6 +74,89 @@ class AvailabilityService:
 
     def get_time_off_by_employee(self, employee_id):
         return self.availability_repository.get_time_off_by_employee(employee_id)
+
+    def get_time_off_request(self, request_id, employee_id):
+        return self.availability_repository.get_time_off_request(request_id, employee_id)
+
+    def get_time_off_review(self, request_id, employee_id):
+        row = self.get_time_off_request(request_id, employee_id)
+        if row is None:
+            return None
+        start = date.fromisoformat(row["start_date"][:10])
+        end = date.fromisoformat(row["end_date"][:10])
+        employee = self.employee_service.get_employee(employee_id)
+        return {
+            "id": row["request_id"],
+            "employee_name": f"{employee.first_name} {employee.last_name}",
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "status": row["status"],
+        }
+
+    def review_time_off_request(self, request_id, employee_id, data):
+        if not isinstance(data, dict) or data.get("status") not in ("Approved", "Denied"):
+            raise ValueError("Status must be Approved or Denied")
+        return self.availability_repository.update_pending_time_off(
+            request_id, employee_id, data["status"]
+        )
+
+    def create_time_off_request(self, data, employee_id):
+        if not isinstance(data, dict):
+            raise ValueError("Request body must be a JSON object")
+
+        dates = []
+        for field in ("start_date", "end_date"):
+            value = data.get(field)
+            if not isinstance(value, str):
+                raise ValueError(f"{field} must be a date in YYYY-MM-DD format")
+            try:
+                parsed = date.fromisoformat(value)
+            except ValueError as error:
+                raise ValueError(f"{field} must be a date in YYYY-MM-DD format") from error
+            if parsed.isoformat() != value:
+                raise ValueError(f"{field} must be a date in YYYY-MM-DD format")
+            dates.append(parsed)
+
+        start, end = dates
+        today = date.today()
+        if start < today or end < today:
+            raise ValueError("Start Date and End Date must be today or later")
+        if end < start:
+            raise ValueError("End Date must be on or after Start Date")
+        if end == date.max:
+            raise ValueError("End Date is too far in the future")
+
+        request_id = self.availability_repository.create_time_off_request(
+            employee_id, start.isoformat(), end.isoformat()
+        )
+        if request_id is None:
+            raise ValueError("Dates overlap an existing time-off request")
+        return self.time_off_event({
+            "request_id": request_id,
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "status": "Pending",
+        })
+
+    @staticmethod
+    def time_off_event(row):
+        return {
+            'id': row['request_id'],
+            'title': f"Status: {row['status']}",
+            'start': row['start_date'].split('T')[0],
+            'end': (date.fromisoformat(row['end_date'].split('T')[0]) + timedelta(days=1)).isoformat(),
+            'allDay': True,
+            'display': 'background',
+            'color': 'red' if row['status'] == 'Approved' else 'yellow' if row['status'] == 'Pending' else 'gray'
+        }
+
+    @staticmethod
+    def split_background_event(event):
+        first_day_end = (date.fromisoformat(event['start']) + timedelta(days=1)).isoformat()
+        first_day = {**event, 'end': first_day_end}
+        if first_day_end >= event['end']:
+            return [first_day]
+        return [first_day, {**event, 'start': first_day_end, 'title': ''}]
     
     def list_employees(self, associates_only=False):
         employees = self.employee_service.list_employees()
@@ -92,15 +175,6 @@ class AvailabilityService:
 
         def as_calendar_time(value):
             return value.rsplit('T', 1)[-1] if 'T' in value else value
-
-        def as_calendar_date(value):
-            return value.split('T')[0] if 'T' in value else value
-
-        def add_one_day(value):
-            return (date.fromisoformat(value.split('T')[0]) + timedelta(days=1)).isoformat()
-
-        def calendar_days(value):
-            return [int(day.strip()) for day in value.split(',') if day.strip()]
 
         # Returns a sorted list of all approved days from the time off data
         def build_approved_days(time_off_data):
@@ -126,16 +200,7 @@ class AvailabilityService:
             if row['status'] == 'Cancelled' or row['status'] == 'Viewed':
                 continue
 
-            background_data.append({
-                'id': row['request_id'],
-                'title': f"Status: {row['status']}",
-                'start': as_calendar_date(row['start_date']),
-                # End date is one day later due to FullCalendar treating end dates as exclusive
-                'end': add_one_day(row['end_date']),
-                'allDay': True,
-                'display': 'background',
-                'color': 'red' if row['status'] == 'Approved' else 'yellow' if row['status'] == 'Pending' else 'gray'
-            })
+            background_data.append(self.time_off_event(row))
 
         # Generate all the events for active shifts and workdays where no availability is set
         for shift in self.availability_repository.get_active_shifts():
@@ -158,10 +223,7 @@ class AvailabilityService:
                 'title': self.availability_repository.get_shift_name(item['shift_id']),
                 'startTime': as_calendar_time(self.availability_repository.get_shift_start_time(item['shift_id'])),
                 'endTime': as_calendar_time(self.availability_repository.get_shift_end_time(item['shift_id'])),
-                'daysOfWeek': calendar_days(self.availability_repository.get_days_with_matching_availability(
-                                            item['employee_availability_id'],
-                                            item['shift_id'],
-                                            item['availability'])),
+                'daysOfWeek': [0 if item['workday_id'] == 7 else item['workday_id']],
                 'availability': item['availability'],
                 'color': 'green' if item['availability'] == 1 else 'gray' if item['availability'] == 2 else 'red',
             })

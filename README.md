@@ -56,6 +56,20 @@ The Alpha Release demonstrates:
 
 ---
 
+# Time-off requests
+
+On the availability calendar, select **New Time-Off Request** and choose an
+inclusive start and end date. Saving creates a pending request and displays it
+as a yellow background on the calendar. Managers and administrators create
+requests from their own availability view; the button is hidden when viewing
+another employee's availability. Dates cannot be before today; the server
+validates today using its local time zone. Requests cannot overlap any existing
+non-cancelled request for the same employee.
+Managers and administrators can review pending requests on another employee's
+availability calendar.
+
+---
+
 # Requirements
 
 ## Python

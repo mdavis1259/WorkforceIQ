@@ -249,16 +249,9 @@ cursor.execute("""
                     'Pending',
                     'Approved',
                     'Denied',
-                    'Viewed',
                     'Cancelled'
                 )
             )
-
-        UNIQUE(
-            employee_id,
-            start_date,
-            end_date
-        )
     )
 """)
 
