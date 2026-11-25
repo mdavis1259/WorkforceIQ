@@ -1,5 +1,7 @@
 from pathlib import Path
 import sqlite3
+from datetime import date, timedelta
+import random
 from werkzeug.security import generate_password_hash
 
 DB_PATH = Path(__file__).parent / "workforce.db"
@@ -351,54 +353,28 @@ cursor.executemany(
     ],
 )
 
+start_date = date(2026, 8, 1)
+
+demand_history = []
+
+for i in range(84):
+    current_date = start_date + timedelta(days=1)
+
+    # weekend boost
+    if current_date.weekday() in (5, 6):
+        sales = random.randint(6200, 7200)
+    else:
+        sales = random.randint(4400, 5400)
+
+    demand_history.append((current_date.isoformat(), sales))
+
 cursor.executemany(
     """
     INSERT INTO DemandHistory
     (demand_date, sales_amount)
     VALUES (?, ?)
-    """,
-    [
-        ("2026-10-01", 4500),
-        ("2026-10-02", 4700),
-        ("2026-10-03", 6200),
-        ("2026-10-04", 5900),
-        ("2026-10-05", 4600),
-        ("2026-10-06", 4550),
-        ("2026-10-07", 4800),
+    """, demand_history)
 
-        ("2026-10-08", 4650),
-        ("2026-10-09", 4850),
-        ("2026-10-10", 6400),
-        ("2026-10-11", 6100),
-        ("2026-10-12", 4700),
-        ("2026-10-13", 4600),
-        ("2026-10-14", 4900),
-
-        ("2026-10-15", 4750),
-        ("2026-10-16", 5000),
-        ("2026-10-17", 6600),
-        ("2026-10-18", 6300),
-        ("2026-10-19", 4800),
-        ("2026-10-20", 4700),
-        ("2026-10-21", 4950),
-
-        ("2026-10-22", 4900),
-        ("2026-10-23", 5150),
-        ("2026-10-24", 6750),
-        ("2026-10-25", 6500),
-        ("2026-10-26", 4900),
-        ("2026-10-27", 4800),
-        ("2026-10-28", 5100),
-
-        ("2026-10-29", 5050),
-        ("2026-10-30", 5300),
-        ("2026-10-31", 7000),
-        ("2026-11-01", 6700),
-        ("2026-11-02", 5000),
-        ("2026-11-03", 4950),
-        ("2026-11-04", 5200),
-    ],
-)
 
 cursor.executemany(
     """

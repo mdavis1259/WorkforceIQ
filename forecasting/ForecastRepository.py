@@ -1,6 +1,21 @@
+from forecasting.Forecast import Forecast
+from datetime import (datetime, timedelta)
+
 class ForecastRepository:
     def __init__(self, conn):
         self.conn = conn
+
+    def row_to_forecast(self, row):
+        return Forecast(
+            forecast_id=row["forecast_id"],
+            forecast_date=row["forecast_date"],
+            projected_sales=row["projected_sales"],
+            projected_sales_low=row["projected_sales_low"],
+            projected_sales_high=row["projected_sales_high"],
+            required_labor_hours=row["required_labor_hours"],
+            labor_budget=row["labor_budget"],
+            status=row["status"]
+        )
 
     def get_demand_history(self):
         """
@@ -86,21 +101,14 @@ class ForecastRepository:
             ORDER BY forecast_date
         """)
 
-        return cursor.fetchall()
+        rows = cursor.fetchall()
 
-    def get_forecast_by_date(self, forecast_date):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            SELECT *
-            FROM Forecasts
-            WHERE forecast_date = ?
-        """, (forecast_date,))
-
-        return cursor.fetchone()
-
-    def get_forecasts_from_date(self, start_date):
+        return [
+            self.row_to_forecast(row)
+            for row in rows
+        ]
+        
+    def get_range(self, start_date, end_date):
 
         cursor = self.conn.cursor()
 
@@ -108,11 +116,26 @@ class ForecastRepository:
             SELECT *
             FROM Forecasts
             WHERE forecast_date >= ?
+              AND forecast_date <= ?
             ORDER BY forecast_date
-            LIMIT 14
-        """, (start_date,))
+        """, (start_date, end_date))
 
-        return cursor.fetchall()
+        rows = cursor.fetchall()
+
+        return [
+            self.row_to_forecast(row)
+            for row in rows
+        ]
+
+    def get_forecast_by_date(self, forecast_date):
+
+        forecasts = self.get_range(forecast_date, forecast_date)
+
+        if not forecasts:
+            return None
+
+        return forecasts[0]
+
         
     def approve_forecast(self, forecast_id):
 
@@ -145,8 +168,8 @@ class ForecastRepository:
 
         cursor.execute("""
             UPDATE Forecasts
-            SET labor_percent = ?
-            AND SET uncertainty = ?
+            SET labor_percent = ?,
+                uncertainty = ?
             WHERE status = ?
         """, (labor_percent, uncertainty, 'Draft')
         )
