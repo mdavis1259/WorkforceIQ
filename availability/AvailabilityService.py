@@ -25,7 +25,7 @@ class AvailabilityService:
     @staticmethod
     def _format_shift_time(value):
         if not isinstance(value, str):
-            raise ValidationError("Shift time must be an ISO time or datetime string")
+            raise ValidationError([{"field": "shift_time", "issue": "must be an ISO time or datetime string"}])
 
         try:
             if "T" in value or " " in value:
@@ -33,11 +33,11 @@ class AvailabilityService:
             else:
                 parsed = time.fromisoformat(value)
         except ValueError:
-            raise ValidationError("Shift time must be an ISO time or datetime string")
+            raise ValidationError([{"field": "shift_time", "issue": "must be an ISO time or datetime string"}])
         if parsed.tzinfo is not None:
-            raise ValidationError("Shift time must not include a time zone")
+            raise ValidationError([{"field": "shift_time", "issue": "must not include a time zone"}])
         if parsed.second or parsed.microsecond:
-            raise ValidationError("Shift time must be an exact minute")
+            raise ValidationError([{"field": "shift_time", "issue": "must be an exact minute"}])
         return parsed.strftime("%H:%M")
 
     @staticmethod
@@ -45,15 +45,15 @@ class AvailabilityService:
         value = data.get(field)
         offset = data.get(f"{field}_timezone_offset")
         if not value or not isinstance(value, str):
-            raise ValidationError(f"{field} must be an ISO datetime")
+            raise ValidationError([{"field": field, "issue": "must be an ISO datetime"}])
         if type(offset) is not int or not -1439 <= offset <= 1439:
-            raise ValidationError(f"{field} timezone offset must be an integer in minutes")
+            raise ValidationError([{"field": field, "issue": "timezone offset must be an integer in minutes"}])
         try:
             timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError as error:
-            raise ValidationError(f"{field} must be an ISO datetime") from error
+            raise ValidationError([{"field": field, "issue": "must be an ISO datetime"}]) from error
         if timestamp.tzinfo is None:
-            raise ValidationError(f"{field} must include a timezone")
+            raise ValidationError([{"field": field, "issue": "must include a timezone"}])
         return timestamp.astimezone(timezone(-timedelta(minutes=offset)))
 
 
@@ -152,12 +152,15 @@ class AvailabilityService:
                 # Return new object if no matching availability exists
                 if avail is None:
                     try:
+                        cursor = self.availability_repository.conn.cursor()
                         avail = self.availability_repository.create_availability(
-                            employee_id, shift.shift_id, workday_id, 2
+                            employee_id, shift.shift_id, workday_id, 2, cursor
                         )
+                        self.availability_repository.conn.commit()
                         availabilities.append(avail)
                     except sqlite3.Error as e:
-                        self.convert_db_error(e, "creating default availability entry")
+                        self.availability_repository.conn.rollback()
+                        self._convert_db_error(e, "creating default availability entry")
                 # Else append the object
                 else:
                     availabilities.append(avail)
@@ -255,17 +258,25 @@ class AvailabilityService:
         
         return success
 
+    def get_allowed_time_off_requests(self, current_user):
+        time_off_objs = []
+        for employee in self.employee_service.list_employees():
+            if self.user_can_access_employee(current_user, employee):
+                time_off_objs.extend(self.get_time_off_by_employee(employee.employee_id))
+        return time_off_objs
 
     # ==========================================
     # Availability Methods
     # ==========================================
 
-    def user_can_access_employee(self, current_user, employee):
+    def user_can_access_employee(self, current_user, employee, inclusive=True):
         """Check if the current user has access to the specified employee."""
         if current_user.system_role_id not in [1, 2, 3]:
             raise PermissionDeniedError("User must be Employee, Manager, or Administrator")
+        # If inclusive is False, the current user should not have access to their own record
+        # Otherwise, they do have access
         if current_user.employee_id == employee.employee_id:
-            return True
+            return inclusive
         if current_user.system_role_id == 1 and current_user.employee_id != employee.employee_id:
             return False
         if current_user.system_role_id == 2 and \
@@ -293,22 +304,22 @@ class AvailabilityService:
         return selectable_employees
 
     def get_availability(self):
-        return self.availability_repository.get_availability()
+        return self.availability_repository.get_availability_data()
 
     def get_availability_by_employee(self, employee_id):
         try:
             return self.availability_repository.get_availability_by_employee(employee_id)
         except sqlite3.Error as e:
-            self.convert_db_error(e, "retrieving employee availabilities")
+            self._convert_db_error(e, "retrieving employee availabilities")
 
     def get_time_off_by_employee(self, employee_id):
         if employee_id is None:
-            raise ValidationError("Employee ID is required")
+            raise ValidationError([{"field": "employee_id", "issue": "is required"}])
         if type(employee_id) is not int:
-            raise ValidationError("Invalid Employee ID")
+            raise ValidationError([{"field": "employee_id", "issue": "must be valid"}])
         time_off_objects = self.availability_repository.get_time_off_by_employee(employee_id)
         if not time_off_objects:
-            raise NotFoundError("No time off requests found for this employee")
+            return []
         return time_off_objects
 
     def get_time_off_request(self, request_id, employee_id):
@@ -331,7 +342,7 @@ class AvailabilityService:
 
     def review_time_off_request(self, request_id, employee_id, data):
         if not isinstance(data, dict) or data.get("status") not in ("Approved", "Denied"):
-            raise ValidationError("Status must be Approved or Denied")
+            raise ValidationError([{"field": "status", "issue": "must be Approved or Denied"}])
         return self.availability_repository.update_pending_time_off(
             request_id, employee_id, data["status"]
         )
@@ -340,16 +351,16 @@ class AvailabilityService:
     def create_time_off_request(self, data, employee_id):
         # Validate employee ID
         if employee_id is None:
-            raise ValidationError("Employee ID is required")
+            raise ValidationError([{"field": "employee_id", "issue": "is required"}])
         if type(employee_id) is not int:
-            raise ValidationError("Invalid Employee ID")
+            raise ValidationError([{"field": "employee_id", "issue": "must be valid"}])
         employee = self.employee_service.get_employee(employee_id)
         if employee is None:
-            raise ValidationError("Invalid Employee ID")
+            raise ValidationError([{"field": "employee_id", "issue": "must be valid"}])
         
         # Validate data (we already know its a dict)
         if not "start_date" in data or not "end_date" in data:
-            raise ValidationError("Both start_date and end_date are required")
+            raise ValidationError([{"field": "dates", "issue": "both start_date and end_date are required"}])
 
         # Get date strings
         dates = []
@@ -361,15 +372,15 @@ class AvailabilityService:
             # Validate 
             value = data.get(field)
             if value is None:
-                raise ValidationError(f"{field} is required")
+                raise ValidationError([{"field": field, "issue": "is required"}])
             if not isinstance(value, str):
-                raise ValidationError(f"{field} must be a date in YYYY-MM-DD format")
+                raise ValidationError([{"field": field, "issue": "must be a date in YYYY-MM-DD format"}])
            
             try:
                 parsed = datetime.strptime(value, "%Y-%m-%d").date()
             except ValueError:
                 # String is not in right format
-                raise ValidationError(f"{field} must be a date in YYYY-MM-DD format")    
+                raise ValidationError([{"field": field, "issue": "must be a date in YYYY-MM-DD format"}])    
             # Append the parsed date to the list of dates
             dates.append(parsed)
 
@@ -377,27 +388,27 @@ class AvailabilityService:
         today = date.today()
         # Validate that start and end dates are not in the past and are in correct order
         if start < today or end < today:
-            raise ValidationError("Start Date and End Date must be today or later")
+            raise ValidationError([{"field": "dates", "issue": "Start Date and End Date must be today or later"}])
         if end < start:
-            raise ValidationError("End Date must be on or after Start Date")
+            raise ValidationError([{"field": "end_date", "issue": "must be on or after start_date"}])
         if start < today:
-            raise ValidationError("Start Date must be today or later")
+            raise ValidationError([{"field": "start_date", "issue": "must be today or later"}])
         if end < today:
-            raise ValidationError("End Date must be today or later")
+            raise ValidationError([{"field": "end_date", "issue": "must be today or later"}])
         if end >= date.max:
-            raise ValidationError("End Date is too far in the future")
+            raise ValidationError([{"field": "end_date", "issue": "is too far in the future"}])
 
         # Validate the range does not overlap any existing time-off requests
-        if self.availability_repository.check_time_off_overlap(employee_id, start_date, end_date):
+        if self.availability_repository.check_time_off_overlap(employee_id, start, end):
             raise ConflictError("Dates overlap an existing time-off request")
 
         # Create the time-off request in the repository
         time_off = self.availability_repository.create_time_off_request(
-            employee_id, start_date, end_date
+            employee_id, start, end
         )
 
         # Convert to calendar event format and return it
-        return self.time_off_event(time_off)
+        return self._time_off_event(time_off)
 
     @staticmethod
     def split_background_event(event):
@@ -417,7 +428,7 @@ class AvailabilityService:
             if time_off.status == 'Cancelled' or time_off.status == 'Viewed':
                 continue
 
-            background_data.append(self.time_off_event(time_off))
+            background_data.append(self._time_off_event(time_off))
 
         # Generate all the events for active shifts and workdays where no availability is set
         for shift in self.availability_repository.get_active_shifts():
@@ -451,23 +462,23 @@ class AvailabilityService:
     def update_availability(self, data, employee_id):
         # Validate data is dict
         if not isinstance(data, dict):
-            raise ValidationError("Request body must be a JSON object")
+            raise ValidationError([{"field": "body", "issue": "Request body must be a JSON object"}])
 
         # Get availability
         availability = data.get("availability")
         if type(availability) is not int or availability not in (0, 1, 2):
-            raise ValidationError("Availability must be 0, 1, or 2")
+            raise ValidationError([{"field": "availability", "issue": "Availability must be 0, 1, or 2"}])
 
         # Get shift name
         shift_name = data.get("shift_name")
         if not isinstance(shift_name, str) or not shift_name.strip():
-            raise ValidationError("Shift name is required")
+            raise ValidationError([{"field": "shift_name", "issue": "Shift name is required"}])
 
         # Get shift start and end times
         start = self._local_event_datetime(data, "start")
         end = self._local_event_datetime(data, "end")
-        start_time = self.format_shift_time(start.replace(tzinfo=None).isoformat())
-        end_time = self.format_shift_time(end.replace(tzinfo=None).isoformat())
+        start_time = self._format_shift_time(start.replace(tzinfo=None).isoformat())
+        end_time = self._format_shift_time(end.replace(tzinfo=None).isoformat())
 
         # Get shift from repository using shift name and start/end times
         shift = self.availability_repository.get_shift(shift_name, start_time, end_time)
@@ -490,10 +501,10 @@ class AvailabilityService:
             try:
                 employee_availability_id = int(employee_availability_id)
             except (TypeError, ValueError):
-                raise ValidationError("Availability ID must be a positive integer")
+                raise ValidationError([{"field": "id", "issue": "Availability ID must be a positive integer"}])
         
         if employee_availability_id <= 0:
-            raise ValidationError("Availability ID must be a positive integer")
+            raise ValidationError([{"field": "id", "issue": "Availability ID must be a positive integer"}])
 
         # Get existing availability row by ID
         availability_obj = self.availability_repository.get_availability_by_id(employee_availability_id)
@@ -521,11 +532,14 @@ class AvailabilityService:
 
         # If not, create a new availability row
         try:
+            cursor = self.availability_repository.conn.cursor()
             availability_obj = self.availability_repository.create_availability(
-                employee_id, shift_id, workday_id, availability
+                employee_id, shift_id, workday_id, availability, cursor
             )
+            self.availability_repository.conn.commit()
         except sqlite3.Error as e:
-            self.convert_db_error(e, "creating availability entry")
+            self.availability_repository.conn.rollback()
+            self._convert_db_error(e, "creating availability entry")
         return availability_obj.employee_availability_id
 
     def get_available_employees_for_shift(self, workday_id, shift_id):

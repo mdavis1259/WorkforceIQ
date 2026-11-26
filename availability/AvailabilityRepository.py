@@ -16,7 +16,7 @@ import sqlite3
 from availability.Availability import Availability
 from availability.Shift import Shift
 from availability.TimeOff import TimeOff
-from shared.exceptions import ValidationError
+from shared.exceptions import NotFoundError, ValidationError, InvalidStateError
 
 
 class AvailabilityRepository:
@@ -54,7 +54,7 @@ class AvailabilityRepository:
             start_date=row["start_date"],
             end_date=row["end_date"],
             status=row["status"]
-        )
+        )       
 
     # ==========================================
     # AVAILABILITY
@@ -62,23 +62,21 @@ class AvailabilityRepository:
 
     # TODO: finish while allowing rollback in case of errors
     def replace_weekly_grid(self, employee_id, weekly_grid):
-        # Clear existing
+        # Get existing
         try:
             current_employee_availabilities = self.get_availability_by_employee(employee_id)
         except sqlite3.Error as e:
-            raise InternalError("Error retrieving employee availabilities") from e
+            raise InvalidStateError("Error retrieving employee availabilities") from e
 
+        # Get cursor for database operations, commit or rollback based on errors
         cursor = self.conn.cursor()
         try:
             for avail in current_employee_availabilities:
-                try:
-                    self.delete_availability({"id": avail.employee_availability_id})
-                except sqlite3.Error as e:
-                    self._convert_db_error(e, "deleting existing availability")
-                    raise
-            self.conn.commit()
+                self.delete_availability({"id": avail.employee_availability_id}, cursor)
         except sqlite3.Error as sql_err:
-            self._convert_db_error(sql_err, "deleting existing availability")
+            self.conn.rollback()
+            raise InvalidStateError("Error deleting existing availability") from sql_err
+        except Exception as e:
             self.conn.rollback()
             raise
 
@@ -94,9 +92,11 @@ class AvailabilityRepository:
                 )
                 new_availability_objects.append(avail_obj)
             except sqlite3.Error as e:
-                self._convert_db_error(e, "creating new availability entry")
-                raise
-
+                self.conn.rollback()
+                raise InvalidStateError("Error creating new availability entry") from e
+            except Exception as e:
+                self.conn.rollback()
+                raise InvalidStateError("Error creating new availability entry") from e
         return new_availability_objects
 
     # Fetches all availability data for all employees
@@ -151,39 +151,32 @@ class AvailabilityRepository:
         rows = cursor.fetchall()
         return [self.row_to_availability(row) for row in rows]
 
-    def create_availability(self, employee_id, shift_id, workday_id, availability):
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(
-                "INSERT INTO EmployeeAvailability (employee_id, shift_id, workday_id, availability) VALUES (?, ?, ?, ?)",
-                (employee_id, shift_id, workday_id, availability)
-            )
-            availability_id = cursor.lastrowid
-            if not availability_id:
-                raise InternalError("Error creating availability")
-            self.conn.commit()
-            return Availability(
-                employee_availability_id=availability_id,
-                employee_id=employee_id,
-                shift_id=shift_id,
-                workday_id=workday_id,
-                availability=availability
-            )
-        except InternalError:
-            self.conn.rollback()
-            raise
+    def create_availability(self, employee_id, shift_id, workday_id, availability, cursor):
+        cursor.execute(
+            "INSERT INTO EmployeeAvailability (employee_id, shift_id, workday_id, availability) VALUES (?, ?, ?, ?)",
+            (employee_id, shift_id, workday_id, availability)
+        )
+        availability_id = cursor.lastrowid
+        if not availability_id:
+            raise InternalError("Error creating availability")
+        return Availability(
+            employee_availability_id=availability_id,
+            employee_id=employee_id,
+            shift_id=shift_id,
+            workday_id=workday_id,
+            availability=availability
+        )
 
     # Deletes an availability entry and its corresponding shift for an employee
     def delete_availability(self, data, cursor):
         if data is None:
-            raise ValidationError("Request body is required")
+            raise ValidationError([{"field": "body", "issue": "is required"}])
         if not isinstance(data, dict):
-            raise ValidationError("Request body must be a JSON object")
+            raise ValidationError([{"field": "body", "issue": "must be a JSON object"}])
 
         employee_availability_id = data.get('id')
         if employee_availability_id is None:
-            raise ValidationError("AvailabilityID is required")
-        
+            raise ValidationError([{"field": "id", "issue": "is required"}])
         
         cursor.execute(
             "SELECT shift_id FROM EmployeeAvailability WHERE employee_availability_id = ?",
@@ -392,11 +385,13 @@ class AvailabilityRepository:
         try:
             cursor = self.conn.execute(
                 "UPDATE TimeOffRequests SET status = ? "
-                "WHERE request_id = ? AND employee_id = ? AND status = 'Pending'",
+                "WHERE request_id = ? AND employee_id = ? AND status = 'Pending' "
+                "RETURNING *",
                 (status, request_id, employee_id),
             )
+            row = cursor.fetchone()
             self.conn.commit()
-            return cursor.rowcount == 1
+            return self.row_to_time_off(row)
         except InternalError:
             self.conn.rollback()
             raise
