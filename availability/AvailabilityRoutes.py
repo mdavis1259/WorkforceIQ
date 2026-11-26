@@ -1,3 +1,28 @@
+"""
+Routes for the Availability Management system (US-4, US-13, US-17).
+
+Routes only deal with requests and responses. Business rules and validation
+live in AvailabilityService.py, and all SQL lives in
+AvailabilityRepository.py. There is no SQL in this file.
+
+Pages (HTML)
+    GET    /availability                                        Employees see own, managers see selector
+    GET    /availability/<employee_id>                          Employees see own, managers see other employees
+    POST   /availability/<employee_id>                          Employees update own, managers update others
+
+API (JSON, SDS 8.3)
+    GET    /api/employees/<employee_id>/availability            Employees get own, managers get others
+    PUT    /api/employees/<employee_id>/availability            Employees update own, managers update others
+    GET    /api/availability?date=<date>&shift_id=<shift_id>    Manager only
+    POST   /api/time-off-requests                               All submit own requests
+    GET    /api/time-off-requests                               Manager sees all employees they mannage, employees see own
+    PATCH  /api/time-off-requests/<request_id>                  Manager only
+
+Every POST/PUT/DELETE must send the CSRF token: an X-CSRF-Token header for the
+API, or a hidden csrf_token field in the HTML forms. All API errors use the
+single format from SDS 8.8.   
+"""
+
 from contextlib import contextmanager
 import hmac
 import secrets
@@ -6,6 +31,7 @@ import uuid
 
 from flask import (
     Blueprint,
+    current_app,
     render_template,
     jsonify,
     redirect,
@@ -32,6 +58,9 @@ availability_bp = Blueprint(
     __name__,
     template_folder='templates'
 )
+
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 100
 
 # ==============================================
 # Helper functions
@@ -87,6 +116,31 @@ def _api_error(status, code, message, details=None):
         error["details"] = details
     return jsonify({"error": error}), status
 
+def read_paging():
+    """?page=1&page_size=25 (maximum 100), SDS section 8.1."""
+    problems = []
+
+    def number(name, default, low, high):
+        raw = request.args.get(name)
+        if raw is None or raw == "":
+            return default
+        try:
+            value = int(raw)
+        except ValueError:
+            value = None
+        if value is None or not low <= value <= high:
+            problems.append({
+                "field": name,
+                "issue": f"Must be a whole number from {low} to {high}."})
+            return default
+        return value
+
+    page = number("page", 1, 1, 1_000_000)
+    page_size = number("page_size", DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE)
+    if problems:
+        raise ValidationError(problems)
+    return page, page_size
+
 # ==============================================
 # CSRF
 # ==============================================
@@ -110,6 +164,22 @@ def csrf_is_valid():
 def add_csrf_token_to_templates():
     """Add the CSRF token to the template context."""
     return {"csrf_token": csrf_token()}
+
+@availability_bp.before_request
+def check_csrf():
+    """Checks signed in, allowed in, and valid CSRF"""
+    if not current_user.is_authenticated:
+        if _is_api_request():
+            return _api_error(401, "UNATHENTICATED", "User is not authenticated.")
+        return current_app.login_manager.unauthorized()
+    if current_user.system_role_id not in [1, 2, 3]:
+        return _forbidden("Account not given access yet.")
+    if request.method in ("POST", "PATCH", "PUT", "DELETE") \
+        and not csrf_is_valid():
+        if _is_api_request():
+            return _api_error(403, "CSRF_ERROR",
+                              "CSRF token missing or invalid.")
+        return ("CSRF token missing or invalid, reload the page and try again."), 403
 
 # ==============================================
 # HTML Routes
@@ -160,6 +230,8 @@ def availability_detail(employee_id):
                 return _forbidden()
 
             if request.method == "POST":
+                if not csrf_is_valid():
+                    return _api_error(403, "FORBIDDEN", "CSRF token validation failed")
                 try:
                     data = _json_body()
                     if not service.user_can_access_employee(current_user, employee):
@@ -208,8 +280,12 @@ def availability_detail(employee_id):
                                     ],
                                     employee=employee)
     except (AttributeError, KeyError, TypeError) as e:
+        if request.is_json or request.method == "POST":
+            return _api_error(400, "BAD_REQUEST", str(e))
         return f"An error occurred: {str(e)}", 400
     except Exception as e:
+        if request.is_json or request.method == "POST":
+            return _api_error(500, "INTERNAL_ERROR", f"An unexpected error occurred: {str(e)}")
         return f"An unexpected error occurred: {str(e)}", 500
 
 # ==========================================
@@ -266,6 +342,9 @@ def update_employee_availability(employee_id):
     """
     conn = get_db_connection()
     try:
+        if not csrf_is_valid():
+            return _api_error(403, "FORBIDDEN", "CSRF token validation failed")
+        
         with _build_availability_service(conn) as service:
             try:
                 employee = service.employee_service.get_employee(employee_id)
@@ -377,6 +456,9 @@ def create_time_off_request():
     conn = get_db_connection()
     try:
         with _build_availability_service(conn) as service:
+            if not csrf_is_valid():
+                return _api_error(403, "FORBIDDEN", "CSRF token validation failed")
+            
             try:
                 data = _json_body()
             except ValidationError as error:
@@ -384,23 +466,32 @@ def create_time_off_request():
 
             try:
                 event = service.submit_time_off(data)
+                split_events = service.split_background_event(event)
+                conn.commit()
                 return jsonify({
                     "status": "success",
-                    "background_events": [event],
+                    "background_events": split_events,
                 }), 201
             except ValidationError as error:
+                conn.rollback()
                 return _api_error(400, "VALIDATION_ERROR", str(error))
             except ConflictError as error:
+                conn.rollback()
                 return _api_error(409, "CONFLICT", str(error))
             except InvalidStateError as error:
+                conn.rollback()
                 return _api_error(409, "INVALID_STATE", str(error))
             except NotFoundError as error:
+                conn.rollback()
                 return _api_error(404, "NOT_FOUND", str(error))
             except Exception as e:
+                conn.rollback()
                 return _api_error(500, "INTERNAL_ERROR", f"An unexpected error occurred: {str(e)}")
     except (AttributeError, KeyError, TypeError) as e:
+        conn.rollback()
         return _api_error(400, "VALIDATION_ERROR", f"Invalid request data: {str(e)}")
     except Exception as e:
+        conn.rollback()
         return _api_error(500, "INTERNAL_ERROR", f"An unexpected error occurred: {str(e)}")
     finally:
         conn.close()
@@ -415,6 +506,7 @@ def get_time_off_requests():
     conn = get_db_connection()
     try:
         with _build_availability_service(conn) as service:
+            page, page_size = read_paging()
             if current_user.system_role_id == 1:
                 try:
                     requests = service.get_time_off_by_employee(current_user.employee_id)
@@ -438,7 +530,10 @@ def get_time_off_requests():
                         "status": r.status
                     }
                     for r in requests
-                ]
+                ],
+                "page": page,
+                "page_size": page_size,
+                "total": len(requests)
             }), 200
     except (AttributeError, KeyError, TypeError) as e:
         return _api_error(400, "VALIDATION_ERROR", f"Invalid request data: {str(e)}")
@@ -451,6 +546,9 @@ def get_time_off_requests():
 def review_time_off_request(request_id):
     conn = get_db_connection()
     try:
+        if not csrf_is_valid():
+            return _api_error(403, "FORBIDDEN", "CSRF token validation failed")
+        
         with _build_availability_service(conn) as service:
             if request_id is None:
                 return _api_error(400, "VALIDATION_ERROR", "Request ID is required")

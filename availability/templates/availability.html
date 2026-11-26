@@ -266,6 +266,7 @@
         <p>Approve?</p>
     </div>
     <p id="reviewError" class="error-message" role="alert" hidden></p>
+    <p id="reviewStatus" hidden></p>
     <div class="availability-modal-actions">
         <button id="reviewApprove" type="button">Approve</button>
         <button id="reviewDeny" type="button">Deny</button>
@@ -276,6 +277,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 <script>
+    const csrfToken = "{{ csrf_token() }}";
     const calendarElement = document.getElementById('calendar');
     const modal = document.getElementById('eventModal');
     const eventTitle = document.getElementById('eventTitle');
@@ -292,6 +294,7 @@
     {% if can_review %}
     const reviewModal = document.getElementById('reviewTimeOffModal');
     const reviewError = document.getElementById('reviewError');
+    const reviewStatus = document.getElementById('reviewStatus');
     const reviewApprove = document.getElementById('reviewApprove');
     const reviewDeny = document.getElementById('reviewDeny');
     const reviewClose = document.getElementById('reviewClose');
@@ -299,6 +302,7 @@
     const reviewUrl = {{ url_for("availability.review_time_off_request", request_id=0)|tojson }};
     let reviewRequestId = null;
     let reviewBusy = false;
+    let selectedReviewStatus = null;
 
     async function openTimeOffReview(requestId) {
         if (reviewBusy || reviewModal.open) return;
@@ -326,22 +330,26 @@
         }
     }
 
-    reviewClose.addEventListener('click', () => reviewModal.close());
-    reviewModal.addEventListener('cancel', event => {
-        if (reviewBusy) event.preventDefault();
-    });
-    [reviewApprove, reviewDeny].forEach(button => {
-        button.addEventListener('click', async () => {
+    reviewClose.addEventListener('click', async () => {
+        if (selectedReviewStatus) {
             if (reviewBusy) return;
             reviewBusy = true;
             [reviewApprove, reviewDeny, reviewClose].forEach(item => item.disabled = true);
             try {
                 const response = await fetch(reviewUrl.replace(/0$/, String(reviewRequestId)), {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: button === reviewApprove ? 'Approved' : 'Denied' })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({ status: selectedReviewStatus })
                 });
+                console.log('DEBUG [PATCH]: Response status:', response.status);
+                console.log('DEBUG [PATCH]: Response ok:', response.ok);
                 const result = await response.json();
+                console.log('DEBUG [PATCH]: Response JSON:', result);
+                console.log('DEBUG [PATCH]: result.background_events:', result.background_events);
+                console.log('DEBUG [PATCH]: result.approved_days:', result.approved_days);
                 if (!response.ok || result.status !== 'success') {
                     throw new Error(result.message || 'Unable to update time-off request.');
                 }
@@ -349,6 +357,7 @@
                     (event.display === 'background' && event.id === String(reviewRequestId)) ||
                     event.extendedProps.reviewRequestId === reviewRequestId
                 ).forEach(event => event.remove());
+                console.log('DEBUG [PATCH]: Adding background events:', result.background_events);
                 result.background_events.forEach(event => calendar.addEvent(event));
                 approvedDays.clear();
                 result.approved_days.forEach(day => approvedDays.add(day));
@@ -356,12 +365,28 @@
                 reviewModal.close();
             } catch (error) {
                 console.error('Unable to update time-off request:', error);
+                console.error('Error stack:', error.stack);
                 reviewError.textContent = error.message || 'Unable to update time-off request.';
                 reviewError.hidden = false;
             } finally {
                 reviewBusy = false;
                 [reviewApprove, reviewDeny, reviewClose].forEach(item => item.disabled = false);
             }
+        } else {
+            reviewModal.close();
+        }
+    });
+
+    reviewModal.addEventListener('cancel', event => {
+        if (reviewBusy) event.preventDefault();
+    });
+
+    [reviewApprove, reviewDeny].forEach(button => {
+        button.addEventListener('click', () => {
+            selectedReviewStatus = button === reviewApprove ? 'Approved' : 'Denied';
+            reviewStatus.textContent = `You selected: ${selectedReviewStatus}`;
+            reviewStatus.hidden = false;
+            reviewClose.textContent = 'Save';
         });
     });
     {% endif %}
@@ -440,18 +465,32 @@
         try {
             const response = await fetch('{{ url_for("availability.create_time_off_request") }}', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
                 body: JSON.stringify({ start_date: startDate, end_date: endDate })
             });
+            console.log('DEBUG: Response status:', response.status);
+            console.log('DEBUG: Response ok:', response.ok);
             const result = await response.json();
+            console.log('DEBUG: Response JSON:', result);
+            console.log('DEBUG: result.status:', result.status);
+            console.log('DEBUG: result.background_events:', result.background_events);
             if (!response.ok || result.status !== 'success') {
                 throw new Error(result.message || 'Failed to create time-off request.');
             }
-            result.background_events.forEach(item => calendar.addEvent(item));
+            console.log('DEBUG: About to add events to calendar');
+            console.log('DEBUG: background_events array length:', result.background_events.length);
+            result.background_events.forEach((item, index) => {
+                console.log(`DEBUG: Adding event ${index}:`, item);
+                calendar.addEvent(item);
+            });
             timeOffRanges.push({ start: startDate, end: endDate });
             timeOffModal.close();
         } catch (error) {
             console.error('Unable to create time-off request:', error);
+            console.error('Error stack:', error.stack);
             timeOffError.textContent = error.message || 'Failed to create time-off request.';
             timeOffError.hidden = false;
         } finally {
@@ -502,7 +541,10 @@
         try {
             const response = await fetch('{{ url_for("availability.availability_detail", employee_id=employee.employee_id) }}', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
                 body: JSON.stringify({
                     id: event.id,
                     shift_name: event.title,
@@ -514,15 +556,19 @@
                 })
             });
             const result = await response.json();
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            console.log('Response result:', result);
             if (!response.ok || result.status !== 'success') {
-                throw new Error(result.message || 'Failed to update availability.');
+                throw new Error(result.message || result.error?.message || 'Failed to update availability.');
             }
             event.setProp('id', String(result.id));
         } catch (error) {
             console.error('Unable to save availability:', error);
+            console.error('Error details:', error.message);
             event.setProp('color', previous.color);
             event.setExtendedProp('availability', previous.availability);
-            alert('Failed to save event changes. The event has been reverted.');
+            alert(`Failed to save event changes. The event has been reverted.\n\nError: ${error.message}`);
         }
     });
 
