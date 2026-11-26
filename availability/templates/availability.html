@@ -260,7 +260,7 @@
 <dialog id="reviewTimeOffModal" class="availability-dialog" aria-labelledby="reviewTimeOffTitle">
     <h2 id="reviewTimeOffTitle">Review time-off request</h2>
     <div class="availability-event-details">
-        <p><strong>Employee Name:</strong> <span id="reviewEmployee"></span></p>
+        <p><strong>Employee Name:</strong> <span id="reviewEmployee">{{ employee.first_name }} {{ employee.last_name }}</span></p>
         <p><strong>Start Date:</strong> <span id="reviewStart"></span></p>
         <p><strong>End Date:</strong> <span id="reviewEnd"></span></p>
         <p>Approve?</p>
@@ -295,6 +295,7 @@
     const reviewApprove = document.getElementById('reviewApprove');
     const reviewDeny = document.getElementById('reviewDeny');
     const reviewClose = document.getElementById('reviewClose');
+    const timeOffRequestsUrl = {{ url_for("availability.get_time_off_requests")|tojson }};
     const reviewUrl = {{ url_for("availability.review_time_off_request", request_id=0)|tojson }};
     let reviewRequestId = null;
     let reviewBusy = false;
@@ -303,14 +304,16 @@
         if (reviewBusy || reviewModal.open) return;
         reviewBusy = true;
         try {
-            const response = await fetch(reviewUrl.replace(/0$/, String(requestId)));
+            const response = await fetch(timeOffRequestsUrl);
             const result = await response.json();
-            if (!response.ok || result.status !== 'success') {
-                throw new Error(result.message || 'Unable to load time-off request.');
+            if (!response.ok) {
+                throw new Error(result.error?.message || 'Unable to load time-off request.');
             }
-            const request = result.request;
-            reviewRequestId = request.id;
-            document.getElementById('reviewEmployee').textContent = request.employee_name;
+            const request = result.requests.find(item => String(item.request_id) === String(requestId));
+            if (!request) {
+                throw new Error('Time-off request not found.');
+            }
+            reviewRequestId = request.request_id;
             document.getElementById('reviewStart').textContent = request.start_date;
             document.getElementById('reviewEnd').textContent = request.end_date;
             reviewError.hidden = true;
@@ -334,7 +337,7 @@
             [reviewApprove, reviewDeny, reviewClose].forEach(item => item.disabled = true);
             try {
                 const response = await fetch(reviewUrl.replace(/0$/, String(reviewRequestId)), {
-                    method: 'PUT',
+                    method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: button === reviewApprove ? 'Approved' : 'Denied' })
                 });
