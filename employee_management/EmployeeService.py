@@ -6,7 +6,7 @@ Roles, Qualifications or EmployeeQualifications tables directly.
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
-from errors import NotFoundError, ValidationError
+from shared.exceptions import NotFoundError, ValidationError
 
 MAX_NAME_LENGTH = 50
 MAX_HOURLY_RATE = Decimal("500")

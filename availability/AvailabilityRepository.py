@@ -16,7 +16,7 @@ import sqlite3
 from availability.Availability import Availability
 from availability.Shift import Shift
 from availability.TimeOff import TimeOff
-from errors import ConflictError, ValidationError
+from shared.exceptions import ValidationError
 
 
 class AvailabilityRepository:

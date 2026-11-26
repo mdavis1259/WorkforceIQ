@@ -1,13 +1,9 @@
-from calendar import monthrange
 from datetime import date, datetime, time, timedelta, timezone
 import sqlite3
 
-from errors import NotFoundError, ConflictError, InvalidStateError
-from shared.exceptions import ValidationError
+from shared.exceptions import NotFoundError, ConflictError, InvalidStateError, PermissionDeniedError, ValidationError
 from availability.Availability import Availability
 from availability.Shift import Shift
-from availability.TimeOff import TimeOff
-from datetime import datetime, date, timedelta
 
 class AvailabilityService:
     TIME_OFF_COLORS = {
@@ -27,7 +23,7 @@ class AvailabilityService:
 
     # Convert an ISO time or local datetime string to the shifts' HH:MM format.
     @staticmethod
-    def format_shift_time(value):
+    def _format_shift_time(value):
         if not isinstance(value, str):
             raise ValidationError("Shift time must be an ISO time or datetime string")
 
@@ -62,7 +58,7 @@ class AvailabilityService:
 
 
     @staticmethod
-    def convert_db_error(errors, operation="database"):
+    def _convert_db_error(error, operation="database"):
         error_str = str(error)
         
         if isinstance(error, sqlite3.IntegrityError):
@@ -84,7 +80,7 @@ class AvailabilityService:
 
     # Convert time-off object into calendar background event
     @staticmethod
-    def time_off_event(time_off):
+    def _time_off_event(time_off):
         return {
             'id': time_off.request_id,
             'title': f"Status: {time_off.status}",
@@ -94,6 +90,46 @@ class AvailabilityService:
             'display': 'background',
             'color': 'red' if time_off.status == 'Approved' else 'yellow' if time_off.status == 'Pending' else 'gray'
         }
+
+    @staticmethod
+    def _as_calendar_time(value):
+        return value.rsplit('T', 1)[-1] if 'T' in value else value
+
+    @staticmethod
+    def _validate_time_off(time_off):
+        if time_off is None:
+            raise InvalidStateError("Time off object is None")
+        if not isinstance(time_off, object):
+            raise InvalidStateError("Time off is not a valid object")
+        for attribute in 'status', 'start_date', 'end_date':
+            if not hasattr(time_off, attribute):
+                raise InvalidStateError(f"Time off object is missing '{attribute}' attribute")
+
+    @staticmethod
+    def _build_approved_days(time_off_data):
+        """Returns a sorted list of all approved days from the time off data"""
+        days = set()
+        for time_off in time_off_data:
+            if not hasattr(time_off, 'status'):
+                raise InvalidStateError("Time off object is missing 'status' attribute")
+            
+            # Only approved days
+            if time_off.status != 'Approved':
+                continue
+
+            try:
+                # Get start and end dates
+                start = date.fromisoformat(time_off.start_date)
+                # End date is one day later due to FullCalendar treating end dates as exclusive
+                end = date.fromisoformat(time_off.end_date)
+                day = start
+                # Add each approved day to the list
+                while day <= end:
+                    days.add(day.isoformat())
+                    day += timedelta(days=1)
+            except Exception as e:
+                raise InvalidStateError(f"Invalid time off date format: {e}")
+        return sorted(days) 
     # ==========================================
     # API Methods (SDS 8.3)
     # ==========================================
@@ -224,6 +260,38 @@ class AvailabilityService:
     # Availability Methods
     # ==========================================
 
+    def user_can_access_employee(self, current_user, employee):
+        """Check if the current user has access to the specified employee."""
+        if current_user.system_role_id not in [1, 2, 3]:
+            raise PermissionDeniedError("User must be Employee, Manager, or Administrator")
+        if current_user.employee_id == employee.employee_id:
+            return True
+        if current_user.system_role_id == 1 and current_user.employee_id != employee.employee_id:
+            return False
+        if current_user.system_role_id == 2 and \
+            self.employee_service.get_system_role(employee.employee_id) > 1:
+            return False
+        return True
+
+    def get_selectable_employees(self, current_user):
+        if current_user is None:
+            raise PermissionDeniedError("User must be signed in")
+
+        if current_user.system_role_id not in [2, 3]:
+            raise PermissionDeniedError("Only managers and administrators can select employees")
+        
+        employees = self.employee_service.list_employees()
+
+        if not employees:
+            raise NotFoundError("No employees found")
+
+        # Get employees that the current user has access to
+        selectable_employees = [
+            employee for employee in employees
+            if self.user_can_access_employee(current_user, employee)
+        ]
+        return selectable_employees
+
     def get_availability(self):
         return self.availability_repository.get_availability()
 
@@ -234,7 +302,14 @@ class AvailabilityService:
             self.convert_db_error(e, "retrieving employee availabilities")
 
     def get_time_off_by_employee(self, employee_id):
-        return self.availability_repository.get_time_off_by_employee(employee_id)
+        if employee_id is None:
+            raise ValidationError("Employee ID is required")
+        if type(employee_id) is not int:
+            raise ValidationError("Invalid Employee ID")
+        time_off_objects = self.availability_repository.get_time_off_by_employee(employee_id)
+        if not time_off_objects:
+            raise NotFoundError("No time off requests found for this employee")
+        return time_off_objects
 
     def get_time_off_request(self, request_id, employee_id):
         return self.availability_repository.get_time_off_request(request_id, employee_id)
@@ -294,8 +369,7 @@ class AvailabilityService:
                 parsed = datetime.strptime(value, "%Y-%m-%d").date()
             except ValueError:
                 # String is not in right format
-                raise ValidationError(f"{field} must be a date in YYYY-MM-DD format")
-            
+                raise ValidationError(f"{field} must be a date in YYYY-MM-DD format")    
             # Append the parsed date to the list of dates
             dates.append(parsed)
 
@@ -332,46 +406,11 @@ class AvailabilityService:
         if first_day_end >= event['end']:
             return [first_day]
         return [first_day, {**event, 'start': first_day_end, 'title': ''}]
-    
-    def list_employees(self, associates_only=False):
-        employees = self.employee_service.list_employees()
-
-        if not employees:
-            return []
-
-        if associates_only:
-            employees = [
-                employee for employee in employees
-                if self.employee_service.get_system_role(employee.employee_id) == 1
-            ]
-        return employees
 
 
     def availability_db_to_events(self, employee_availability_data, time_off_data, employee_id):
         formatted_data = []
         background_data = []
-
-        def as_calendar_time(value):
-            return value.rsplit('T', 1)[-1] if 'T' in value else value
-
-        # Returns a sorted list of all approved days from the time off data
-        def build_approved_days(time_off_data):
-            days = set()
-            for time_off in time_off_data:
-                # Only approved days
-                if time_off.status != 'Approved':
-                    continue
-
-                # Get start and end dates
-                start = date.fromisoformat(time_off.start_date.split('T')[0])
-                # End date is one day later due to FullCalendar treating end dates as exclusive
-                end = date.fromisoformat(time_off.end_date.split('T')[0])
-                day = start
-                # Add each approved day to the list
-                while day <= end:
-                    days.add(day.isoformat())
-                    day += timedelta(days=1)
-            return sorted(days) 
         
         # First, get time off
         for time_off in time_off_data:
@@ -387,8 +426,8 @@ class AvailabilityService:
                     formatted_data.append({
                         'id': None,
                         'title': shift.shift_name,
-                        'startTime': as_calendar_time(shift.start_time),
-                        'endTime': as_calendar_time(shift.end_time),
+                        'startTime': self._as_calendar_time(shift.start_time),
+                        'endTime': self._as_calendar_time(shift.end_time),
                         'daysOfWeek': [0 if workday_id == 7 else workday_id],
                         'availability': 2,
                         'color': 'gray',
@@ -399,14 +438,14 @@ class AvailabilityService:
             formatted_data.append({
                 'id': item.employee_availability_id,
                 'title': self.availability_repository.get_shift_name(item.shift_id),
-                'startTime': as_calendar_time(self.availability_repository.get_shift_start_time(item.shift_id)),
-                'endTime': as_calendar_time(self.availability_repository.get_shift_end_time(item.shift_id)),
+                'startTime': self._as_calendar_time(self.availability_repository.get_shift_start_time(item.shift_id)),
+                'endTime': self._as_calendar_time(self.availability_repository.get_shift_end_time(item.shift_id)),
                 'daysOfWeek': [0 if item.workday_id == 7 else item.workday_id],
                 'availability': item.availability,
                 'color': 'green' if item.availability == 1 else 'gray' if item.availability == 2 else 'red',
             })
 
-        return formatted_data, background_data, build_approved_days(time_off_data)
+        return formatted_data, background_data, self._build_approved_days(time_off_data)
 
     # Update availability row to match new data provided by the user
     def update_availability(self, data, employee_id):

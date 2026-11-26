@@ -40,7 +40,7 @@ from employee_management.EmployeeRepository import EmployeeRepository
 from employee_management.EmployeeService import (DEFAULT_MAX_HOURS,
                                                  DEFAULT_PREFERRED_HOURS,
                                                  EmployeeService)
-from errors import NotFoundError, ValidationError
+from shared.exceptions import NotFoundError, ValidationError
 
 employee_bp = Blueprint("employee", __name__, template_folder="templates")
 
