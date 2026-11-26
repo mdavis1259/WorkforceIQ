@@ -21,8 +21,12 @@ class ValidationError(Exception):
     """
 
     def __init__(self, details):
-        self.details = list(details)
-        message = "; ".join(f"{d['field']}: {d['issue']}" for d in self.details)
+        if isinstance(details, str):
+            self.details = []
+            message = details
+        else:
+            self.details = list(details)
+            message = "; ".join(f"{d['field']}: {d['issue']}" for d in self.details)
         super().__init__(message or "Validation failed.")
 
 class NotFoundError(Exception):
