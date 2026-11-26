@@ -37,8 +37,9 @@ def _names(options):
 
 
 class QueryPlanner:
-    def __init__(self, data):
+    def __init__(self, data, budget=None):
         self.data = data
+        self.budget = budget
 
     def execute(self, intent):
         query_type = intent.get("query_type")
@@ -127,11 +128,33 @@ class QueryPlanner:
 
     # -- SCHEDULE_WITHIN_BUDGET -----------------------------------
     def _schedule_within_budget(self, intent):
-        # Needs the Scheduling service (US-8). Until it is merged, say so
-        # instead of inventing an answer.
-        return {"status": "unavailable",
-                "message": "The budget check is not available yet. It will "
-                           "work once weekly scheduling is finished."}
+        if self.budget is None:
+            return {"status": "unavailable",
+                    "message": "The budget check is not available yet. It "
+                               "will work once weekly scheduling is "
+                               "finished."}
+        week = intent.get("week_start")
+        if not week:
+            return self._clarify("Which week do you mean (for example this "
+                                 "week, next week, or 2026-11-30)?")
+        result = self.budget.weekly_budget(week)
+        if result is None:
+            return {"status": "unavailable",
+                    "message": f"No schedule has been generated for the "
+                               f"week of {week}. Generate it on the "
+                               f"Schedule page first."}
+        if not result["has_assignments"]:
+            return {"status": "unavailable",
+                    "message": f"The schedule for the week of "
+                               f"{result['week_start']} has no assignments "
+                               f"yet."}
+        if result["within_budget"] is None:
+            days = ", ".join(result["missing_forecast_days"]) or "that week"
+            return {"status": "unavailable",
+                    "message": f"No forecast labor budget is saved for "
+                               f"{days}, so cost cannot be compared. "
+                               f"Generate the forecast first."}
+        return {"status": "budget", "budget": result}
 
     @staticmethod
     def _clarify(message):

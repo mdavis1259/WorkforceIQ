@@ -8,6 +8,7 @@ from flask_login import current_user
 
 from assistant.AssistantService import AssistantService
 from assistant.AssistantData import build_default_data
+from assistant.BudgetReader import build_default_budget
 from assistant.OllamaClient import OllamaClient
 
 
@@ -16,7 +17,8 @@ class Controller:
         factory = current_app.config.get("ASSISTANT_SERVICE_FACTORY")
         if factory:
             return factory()
-        return AssistantService(build_default_data(), OllamaClient())
+        return AssistantService(build_default_data(), OllamaClient(),
+                                budget=build_default_budget())
 
     def query(self, question):
         # Role and length are checked inside AssistantService.ask so the

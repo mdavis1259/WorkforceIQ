@@ -19,7 +19,7 @@ log = logging.getLogger("assistant.queries")
 
 
 class AssistantService:
-    def __init__(self, data, ollama_client, today=None):
+    def __init__(self, data, ollama_client, today=None, budget=None):
         self.data = data
         self.parser = IntentParser(
             ollama_client,
@@ -27,7 +27,7 @@ class AssistantService:
             role_names=(list(data.role_names().values())
                         + list(data.qualification_names().values())),
             today=today)
-        self.planner = QueryPlanner(data)
+        self.planner = QueryPlanner(data, budget)
         self.validator = RuleValidator(data)
         self.builder = ResponseBuilder()
 
@@ -45,6 +45,10 @@ class AssistantService:
             plan = self.planner.execute(intent)
             if plan["status"] == "needs_clarification":
                 response = self.builder.needs_clarification(intent, plan["message"])
+            elif plan["status"] == "budget":
+                response = self.builder.budget_answer(
+                    intent, plan["budget"],
+                    self.validator.validate_budget(plan["budget"]))
             elif plan["status"] == "unavailable":
                 response = self.builder.unavailable(intent, plan["message"])
             elif plan["status"] == "unsupported":
