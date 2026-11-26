@@ -1,3 +1,8 @@
+from contextlib import contextmanager
+import hmac
+import secrets
+import uuid
+
 from assistant.AssistantTests import service
 from flask import (
     Blueprint,
@@ -8,13 +13,21 @@ from flask import (
     session,
     url_for
 )
+from functools import wraps
 
 from flask_login import current_user, login_required
+from availability import Availability
 from database.connection import get_db_connection
 from availability.AvailabilityRepository import AvailabilityRepository
 from availability.AvailabilityService import AvailabilityService
 from employee_management.EmployeeRepository import EmployeeRepository
-from employee_management.EmployeeService import EmployeeService
+from employee_management.EmployeeRoutes import manager_required
+from employee_management.EmployeeService import Employee, EmployeeService
+from dataclasses import asdict
+
+from shared.exceptions import ValidationError
+from errors import NotFoundError
+from datetime import datetime
 
 availability_bp = Blueprint(
     'availability',
@@ -22,185 +35,476 @@ availability_bp = Blueprint(
     template_folder='templates'
 )
 
+# ==============================================
+# Helper functions
+# ==============================================
+@contextmanager
 def _build_availability_service(conn):
+    """Build repository and service instances."""
     employee_repo = EmployeeRepository(conn)
     employee_service = EmployeeService(employee_repo)
 
-    #Get repository and service
     availability_repo = AvailabilityRepository(conn)
     service = AvailabilityService(availability_repo, employee_service)
-    return service
-
-
-def _selected_employee_id(service):
-    if current_user.system_role_id == 1:
-        session["availability_employee"] = current_user.employee_id
-        return current_user.employee_id
-
-    employee_id = session.get("availability_employee", current_user.employee_id)
-    if current_user.system_role_id == 2:
-        selectable_employee_ids = {
-            employee.employee_id
-            for employee in service.list_employees(associates_only=True)
-        }
-        if employee_id != current_user.employee_id and employee_id not in selectable_employee_ids:
-            session.pop("availability_employee", None)
-            return None
-    return employee_id
-
-
-@availability_bp.route('/availability', methods=["GET", "POST"])
-@login_required
-def availability():
-    conn = get_db_connection()
     try:
-        service = _build_availability_service(conn)
-
-        employee_id = _selected_employee_id(service)
-        if employee_id is None:
-            return redirect(url_for("availability.avail_select"))
-
-
-        # Used for Availability updates
-        if request.method == "POST":
-            data = request.get_json()
-            print("In POST with data:", data)
-            try:
-                updated = service.update_availability(data, employee_id)
-            except ValueError as error:
-                return jsonify({"status": "error", "message": str(error)}), 400
-            if not updated:
-                return jsonify({"status": "error", "message": "Availability not found"}), 404
-            return jsonify({"status": "success", "id": updated, "message": "Availability updated successfully"}), 200
-        
-
-        time_off_requests = service.get_time_off_by_employee(employee_id)
-        avail_events, background_events, approved_days = service.availability_db_to_events(
-            service.get_availability_by_employee(employee_id),
-            time_off_requests,
-            employee_id,
-        )
-        can_review = current_user.system_role_id in (2, 3) and employee_id != current_user.employee_id
-        pending_ids = {row["request_id"] for row in time_off_requests if row["status"] == "Pending"}
-        calendar_background_events = [
-            {**segment, "reviewRequestId": event["id"]}
-            if can_review and event["id"] in pending_ids else segment
-            for event in background_events
-            for segment in service.split_background_event(event)
-        ]
-        return render_template('availability.html',
-                               availability=avail_events,
-                               background=calendar_background_events,
-                               can_review=can_review,
-                               approved_days=approved_days,
-                               time_off_ranges=[
-                                   {
-                                       "start": row["start_date"][:10],
-                                       "end": row["end_date"][:10],
-                                   }
-                                   for row in time_off_requests
-                                   if row["status"] != "Cancelled"
-                               ],
-                               employee=service.employee_service.get_employee(employee_id))
+        yield service
     finally:
         conn.close()
 
+def _is_api_request():
+    """Determine if the current request is an API request."""
+    return request.path.startswith("/api/")
+
+def _is_manager():
+    """Check if the current user is a manager or higher."""
+    return current_user.system_role_id >= 2
+
+def _forbidden(message="You do not have permission to do that."):
+    """Return a forbidden response, formatted for API or web requests."""
+    if _is_api_request():
+        return _api_error(403, "FORBIDDEN", message)
+    return message, 403
+
+def _json_body():
+    """Parse JSON request body, raising ValidationError if invalid."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValidationError([{
+            "field": "body",
+            "issue": "Request body must be a JSON object."}])
+    return data
+
+def manager_required(view):
+    """Only Managers (level 2) and Administrators (level 3) may continue."""
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not _is_manager():
+            return _forbidden()
+        return view(*args, **kwargs)
+    return wrapper
+
+# ==============================================
+# CSRF
+# ==============================================
+
+def csrf_token():
+    """The signed-in session's CSRF token (created the first time it is needed)."""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(16)
+    return session["csrf_token"]
+
+
+def csrf_is_valid():
+    """Validate the CSRF token for the current request."""
+    expected = session.get("csrf_token", "")
+    sent = (request.headers.get("X-CSRF-Token")
+            or request.form.get("csrf_token", ""))
+    return bool(expected) and hmac.compare_digest(sent.encode(),
+                                                  expected.encode())
+
+@availability_bp.app_context_processor
+def add_csrf_token_to_templates():
+    """Add the CSRF token to the template context."""
+    return {"csrf_token": csrf_token()}
+
+def _user_can_access_employee(employee_id):
+    """Check if the current user has access to the specified employee."""
+    if current_user.system_role_id not in [1, 2, 3]:
+        return False
+    if current_user.system_role_id == 1 and current_user.employee_id != employee_id:
+        return False
+    return True
+
+def _api_error(status, code, message, details=None):
+    """Standardized API error response format from SDS Section 8.8"""
+    error = {"code": code, "message": message,
+             "request_id": uuid.uuid4().hex[:8]}
+    if details is not None:
+        error["details"] = details
+    return jsonify({"error": error}), status
+
+# ==============================================
+# HTML Routes
+# ==============================================
+
+@availability_bp.route('/availability', methods=["GET"])
+@login_required
+def availability_selector():
+    """Show employee selector for managers/admins, or redirect employees to their own availability."""
+    if current_user.system_role_id == 1:
+        return redirect(url_for("availability.availability_detail",
+                                employee_id=current_user.employee_id))
+
+    conn = get_db_connection()
+    try:
+        with _build_availability_service(conn) as service:
+            selectable_employees = service.list_employees(
+                associates_only=current_user.system_role_id == 2
+            )
+            # Ensure the current user (manager) is included in the list
+            if current_user.system_role_id == 2:
+                current_user_in_list = any(
+                    emp.employee_id == current_user.employee_id 
+                    for emp in selectable_employees
+                )
+                if not current_user_in_list:
+                    selectable_employees.append(current_user)
+        return render_template(
+            'avail_select.html',
+            employees=selectable_employees,
+        )
+    finally:
+        conn.close()
+
+@availability_bp.route('/availability/<int:employee_id>', methods=["GET", "POST"])
+@login_required
+def availability_detail(employee_id):
+    """Display and manage availability for a specific employee."""
+    conn = get_db_connection()
+    try:
+        with _build_availability_service(conn) as service:
+            if not _user_can_access_employee(employee_id):
+                return _forbidden()
+
+            try:
+                employee = service.employee_service.get_employee(employee_id)
+            except NotFoundError:
+                return _forbidden()
+
+            if current_user.system_role_id == 2:
+                selectable_employee_ids = {
+                    e.employee_id for e in service.employee_service.list_employees()
+                    if service.employee_service.get_system_role(e.employee_id) == 1
+                }
+                if employee_id != current_user.employee_id and employee_id not in selectable_employee_ids:
+                    return _forbidden()
+
+            if request.method == "POST":
+                try:
+                    data = _json_body()
+                except ValidationError as error:
+                    return _api_error(400, "VALIDATION_ERROR", str(error))
+
+                try:
+                    updated = service.update_availability(data, employee_id)
+                    if not updated:
+                        raise NotFoundError("Availability not found")
+                except ValidationError as error:
+                    return _api_error(400, "VALIDATION_ERROR", str(error))
+                except NotFoundError as error:
+                    return _api_error(404, "NOT_FOUND", str(error))
+
+                return jsonify({"status": "success", "id": updated, "message": "Availability updated successfully"}), 200
+
+            time_off_requests = service.get_time_off_by_employee(employee_id)
+            avail_events, background_events, approved_days = service.availability_db_to_events(
+                service.get_availability_by_employee(employee_id),
+                time_off_requests,
+                employee_id,
+            )
+            can_review = current_user.system_role_id in (2, 3) and employee_id != current_user.employee_id
+            pending_ids = {time_off.request_id for time_off in time_off_requests if time_off.status == "Pending"}
+            calendar_background_events = [
+                {**segment, "reviewRequestId": event["id"]}
+                if can_review and event["id"] in pending_ids else segment
+                for event in background_events
+                for segment in service.split_background_event(event)
+            ]
+            return render_template('availability.html',
+                                   availability=avail_events,
+                                   background=calendar_background_events,
+                                   can_review=can_review,
+                                   approved_days=approved_days,
+                                   time_off_ranges=[
+                                       {
+                                           "start": time_off.start_date[:10],
+                                           "end": time_off.end_date[:10],
+                                       }
+                                       for time_off in time_off_requests
+                                       if time_off.status != "Cancelled"
+                                   ],
+                                   employee=employee)
+    finally:
+        conn.close()
+
+# ==========================================
+# API Routes
+# ==========================================
+
+# Gets weekly availabiltiy for an employee
+@availability_bp.route('/api/employees/<int:employee_id>/availability', methods=["GET"])
+@login_required
+def get_employee_availability(employee_id):
+    """Get weekly availability for an employee."""
+    if not _user_can_access_employee(employee_id):
+        return _api_error(403, "FORBIDDEN", "You are not allowed to view this employee's availability")
+
+    conn = get_db_connection()
+    try:
+        with _build_availability_service(conn) as service:
+            employee = service.employee_service.get_employee(employee_id)
+            if employee is None:
+                return _api_error(404, "NOT_FOUND", f"Employee {employee_id} not found")
+
+            weekly_grid = service.get_weekly_grid(employee_id)
+            if not weekly_grid or len(weekly_grid) == 0:
+                return _api_error(404, "NOT_FOUND", "No availability found for this employee")
+            weekly_list = []
+            for avail in weekly_grid:
+                if avail is None or type(avail) is not Availability:
+                    return _api_error(400, "INVALID_STATE", "Availability object is invalid")
+                weekly_list.append(asdict(avail))
+
+            return jsonify({"weekly_grid": weekly_list}), 200
+    except Exception as e:
+        return _api_error(400, "ERROR", str(e))
+    finally:
+        conn.close()
+
+# Replace weekly availability grid for an employee
+@availability_bp.route('/api/employees/<int:employee_id>/availability', methods=["PUT"])
+@login_required
+def update_employee_availability(employee_id):
+    """
+    Replace the entire weekly availability grid for an employee.
+    Employees can only update their own. Managers can update employees. Admin can update anyone.
+    Request body: {"entries": [{"workday_id": 1, "shift_id": 1, "available": true}, ...]}
+    """
+    if not _user_can_access_employee(employee_id):
+        return _api_error(403, "FORBIDDEN", "You are not allowed to update this employee's availability")
+
+    conn = get_db_connection()
+    try:
+        with _build_availability_service(conn) as service:
+            employee = service.employee_service.get_employee(employee_id)
+            if employee is None:
+                return _api_error(404, "NOT_FOUND", f"Employee {employee_id} not found")
+
+            try:
+                data_json = _json_body()
+            except ValidationError as error:
+                return _api_error(400, "VALIDATION_ERROR", str(error))
+
+            weekly_grid = data_json.get("weekly_grid")
+            if not isinstance(weekly_grid, list):
+                return _api_error(400, "VALIDATION_ERROR", "weekly_grid must be a list")
+
+            for avail_dict in weekly_grid:
+                if not isinstance(avail_dict, dict):
+                    return _api_error(400, "VALIDATION_ERROR", "Each entry must be an object")
+                if "workday_id" not in avail_dict or "shift_id" not in avail_dict or "available" not in avail_dict:
+                    return _api_error(400, "VALIDATION_ERROR", "Each entry must have workday_id, shift_id, and available")
+                if not isinstance(avail_dict["available"], bool):
+                    return _api_error(400, "VALIDATION_ERROR", "available must be a boolean")
+
+            availability = service.replace_weekly_grid(employee_id, weekly_grid)
+            avail_list = []
+            for avail in availability:
+                if avail is None or type(avail) is not Availability:
+                    return _api_error(400, "INVALID_STATE", "Availability object is invalid")
+                avail_list.append(asdict(avail))
+
+            return jsonify({"weekly_grid": avail_list}), 200
+
+    except (AttributeError, KeyError, TypeError) as e:
+        return _api_error(400, "VALIDATION_ERROR", str(e))
+    finally:
+        conn.close()
+
+# List who is available for a date and shift
+# Query params: date (string, YYYY-MM-DD), shift_id (integer, exists)
+@availability_bp.route('/api/availability?date=<string:date>&shift_id=<int:shift_id>', methods=["GET"])
+@login_required
+@manager_required
+def get_employees_by_date_and_shift(date, shift_id):
+    """List who is available for a date and shift."""
+    if not date or type(date) is not str:
+        return _api_error(400, "VALIDATION_ERROR", "Date string required")
+    try:
+        datetime_obj = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return _api_error(400, "VALIDATION_ERROR", "Invalid date format")
+
+    if not shift_id:
+        return _api_error(400, "VALIDATION_ERROR", "shift_id required")
+    try:
+        shift_id = int(shift_id)
+        if shift_id <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return _api_error(400, "VALIDATION_ERROR", "Invalid date or shift_id format")
+
+    conn = get_db_connection()
+    try:
+        with _build_availability_service(conn) as service:
+            workday_id = datetime_obj.isoweekday()
+
+            available_employees = service.get_available_employees_for_shift(workday_id, shift_id)
+            if not available_employees:
+                return _api_error(404, "NOT_FOUND", "No available employees found for that shift on that date")
+
+            emp_list = []
+            for emp in available_employees:
+                if emp is None or type(emp) is not Employee:
+                    return _api_error(400, "INVALID_STATE", "Employee object is invalid")
+                emp_list.append(asdict(emp))
+
+            return jsonify({
+                "date": date,
+                "shift_id": shift_id,
+                "count": len(available_employees),
+                "employees": emp_list
+            }), 200
+    finally:
+        conn.close()
 
 @availability_bp.route('/api/time-off-requests', methods=["POST"])
 @login_required
 def create_time_off_request():
     conn = get_db_connection()
     try:
-        service = _build_availability_service(conn)
-        employee_id = _selected_employee_id(service)
-        if employee_id is None:
-            return jsonify({"status": "error", "message": "Employee is not accessible"}), 403
-        try:
-            event = service.create_time_off_request(request.get_json(silent=True), employee_id)
-        except ValueError as error:
-            return jsonify({"status": "error", "message": str(error)}), 400
-        return jsonify({
-            "status": "success",
-            "event": event,
-            "background_events": service.split_background_event(event),
-        }), 201
+        with _build_availability_service(conn) as service:
+            try:
+                data = _json_body()
+            except ValidationError as error:
+                return _api_error(400, "VALIDATION_ERROR", str(error))
+
+            event = service.create_time_off_request(data, current_user.employee_id)
+            return jsonify({
+                "status": "success",
+                "event": event,
+            }), 201
     finally:
         conn.close()
 
-
+# UNCHECKED TODO
 @availability_bp.route('/api/time-off-requests/<int:request_id>', methods=["GET", "PUT"])
 @login_required
 def review_time_off_request(request_id):
     if current_user.system_role_id not in (2, 3):
-        return jsonify({"status": "error", "message": "Not authorized to review requests"}), 403
+        return _api_error(403, "FORBIDDEN", "Not authorized to review requests")
+    
     conn = get_db_connection()
     try:
-        service = _build_availability_service(conn)
-        employee_id = _selected_employee_id(service)
-        if employee_id is None or employee_id == current_user.employee_id:
-            return jsonify({"status": "error", "message": "Employee is not accessible for review"}), 403
-        review = service.get_time_off_review(request_id, employee_id)
-        if review is None:
-            return jsonify({"status": "error", "message": "Time-off request not found"}), 404
-        if review["status"] != "Pending":
-            return jsonify({"status": "error", "message": "Time-off request is no longer pending"}), 409
-        if request.method == "GET":
-            return jsonify({"status": "success", "request": review})
-        try:
-            updated = service.review_time_off_request(request_id, employee_id, request.get_json(silent=True))
-        except ValueError as error:
-            return jsonify({"status": "error", "message": str(error)}), 400
-        if not updated:
-            return jsonify({"status": "error", "message": "Time-off request is no longer pending"}), 409
-        _, _, approved_days = service.availability_db_to_events(
-            [], service.get_time_off_by_employee(employee_id), employee_id
-        )
-        row = service.get_time_off_request(request_id, employee_id)
-        event = service.time_off_event(row)
-        return jsonify({
-            "status": "success",
-            "background_events": service.split_background_event(event),
-            "approved_days": approved_days,
-        })
+        with _build_availability_service(conn) as service:
+            time_off = service.availability_repository.get_time_off_request_by_id(request_id)
+            if time_off is None:
+                return _api_error(404, "NOT_FOUND", "Time-off request not found")
+            
+            employee_id = time_off.employee_id
+            if employee_id == current_user.employee_id:
+                return _api_error(403, "FORBIDDEN", "Cannot review your own requests")
+
+            if request.method == "GET":
+                review = service.get_time_off_review(request_id, employee_id)
+                if review is None:
+                    return _api_error(404, "NOT_FOUND", "Time-off request not found")
+                return jsonify({"status": "success", "request": review})
+
+            if time_off.status != "Pending":
+                return _api_error(409, "CONFLICT", "Time-off request is no longer pending")
+
+            try:
+                data = _json_body()
+            except ValidationError as error:
+                return _api_error(400, "VALIDATION_ERROR", str(error))
+
+            try:
+                updated = service.review_time_off_request(request_id, employee_id, data)
+            except ValueError as error:
+                return _api_error(400, "VALIDATION_ERROR", str(error))
+
+            if not updated:
+                return _api_error(409, "CONFLICT", "Time-off request is no longer pending")
+
+            _, _, approved_days = service.availability_db_to_events(
+                [], service.get_time_off_by_employee(employee_id), employee_id
+            )
+            row = service.get_time_off_request(request_id, employee_id)
+            event = service.time_off_event(row)
+            return jsonify({
+                "status": "success",
+                "background_events": service.split_background_event(event),
+                "approved_days": approved_days,
+            })
     finally:
         conn.close()
 
-
-@availability_bp.route('/avail_select', methods=["GET", "POST"])
+@availability_bp.route('/api/time-off-requests', methods=["GET"])
 @login_required
-def avail_select():
+def get_time_off_requests():
+    """
+    List time-off requests.
+    Employees see only their own. Managers see all.
+    """
     conn = get_db_connection()
     try:
-        service = _build_availability_service(conn)
+        with _build_availability_service(conn) as service:
+            if current_user.system_role_id == 1:
+                requests = service.get_time_off_by_employee(current_user.employee_id)
+            else:
+                requests = service.get_all_time_off_requests()
 
-        if current_user.system_role_id == 1:
-            session["availability_employee"] = current_user.employee_id
-            return redirect(url_for("availability.availability"))
+            return jsonify({
+                "requests": [
+                    {
+                        "request_id": r.request_id,
+                        "employee_id": r.employee_id,
+                        "start_date": r.start_date,
+                        "end_date": r.end_date,
+                        "status": r.status
+                    }
+                    for r in requests
+                ]
+            }), 200
+    except Exception as e:
+        return _api_error(400, "ERROR", str(e))
+    finally:
+        conn.close()
 
-        selectable_employees = service.list_employees(
-            associates_only=current_user.system_role_id == 2
-        )
-
-        if request.method == "POST":
+@availability_bp.route('/api/time-off-requests/<int:request_id>', methods=["PATCH"])
+@login_required
+def patch_time_off_request(request_id):
+    """
+    Approve, deny, or cancel a time-off request.
+    Managers can approve/deny. Owners can cancel.
+    Request body: {"action": "approve" | "deny" | "cancel"}
+    """
+    conn = get_db_connection()
+    try:
+        with _build_availability_service(conn) as service:
             try:
-                availability_employee = int(request.form["employee_id"])
-            except (TypeError, ValueError):
-                return "Please select a valid employee.", 400
+                data = _json_body()
+            except ValidationError as error:
+                return _api_error(400, "VALIDATION_ERROR", str(error))
 
-            allowed_employee_ids = {
-                employee.employee_id for employee in selectable_employees
-            }
-            if current_user.system_role_id in (2, 3):
-                allowed_employee_ids.add(current_user.employee_id)
-            if availability_employee not in allowed_employee_ids:
-                return "Please select a valid employee.", 400
+            action = data.get("action")
+            if action not in ("approve", "deny", "cancel"):
+                return _api_error(400, "VALIDATION_ERROR", "action must be 'approve', 'deny', or 'cancel'")
 
-            session["availability_employee"] = availability_employee
-            return redirect(url_for("availability.availability"))
+            time_off = service.availability_repository.get_time_off_request_by_id(request_id)
+            if time_off is None:
+                return _api_error(404, "NOT_FOUND", "Time-off request not found")
 
-        return render_template(
-            'avail_select.html',
-            employees=selectable_employees,
-        )
+            if action == "cancel":
+                if current_user.employee_id != time_off.employee_id:
+                    return _api_error(403, "FORBIDDEN", "Only the request owner can cancel")
+            else:
+                if current_user.system_role_id < 2:
+                    return _api_error(403, "FORBIDDEN", "Only managers can approve or deny requests")
+
+            try:
+                new_status = "Approved" if action == "approve" else "Denied" if action == "deny" else "Cancelled"
+                service.update_time_off_request_status(request_id, time_off.employee_id, new_status)
+            except ValueError as error:
+                return _api_error(409, "CONFLICT", str(error))
+
+            return jsonify({
+                "status": "success",
+                "message": f"Request {action}ed successfully",
+                "new_status": new_status
+            }), 200
+    except Exception as e:
+        return _api_error(400, "ERROR", str(e))
     finally:
         conn.close()

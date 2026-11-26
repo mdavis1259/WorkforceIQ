@@ -521,7 +521,7 @@ class AvailabilityTests(unittest.TestCase):
             rendered.append(context)
 
         with template_rendered.connected_to(capture_template, app):
-            page = self.client.get("/availability")
+            page = self.client.get("/availability/101")
         self.assertEqual(page.status_code, 200)
         self.assertEqual(rendered[0]["background"], expected_segments)
 
@@ -654,7 +654,7 @@ class AvailabilityTests(unittest.TestCase):
             rendered.append(context)
 
         with template_rendered.connected_to(capture_template, app):
-            response = self.client.get("/availability")
+            response = self.client.get("/availability/101")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(rendered[0]["time_off_ranges"], [
             {"start": "2035-02-01", "end": "2035-02-02"},
@@ -762,16 +762,14 @@ class AvailabilityTests(unittest.TestCase):
         connection.commit()
         connection.close()
         self.login_manager()
-        self.assertNotIn(b'id="reviewTimeOffModal"', self.client.get("/availability").data)
-        with self.client.session_transaction() as session_data:
-            session_data["availability_employee"] = 101
+        self.assertNotIn(b'id="reviewTimeOffModal"', self.client.get("/availability/202").data)
         contexts = []
 
         def capture_template(sender, template, context, **extra):
             contexts.append(context)
 
         with template_rendered.connected_to(capture_template, app):
-            response = self.client.get("/availability")
+            response = self.client.get("/availability/101")
         self.assertIn(b'id="reviewTimeOffModal"', response.data)
         self.assertNotIn(b"Review pending time off", response.data)
         self.assertTrue(all(
@@ -804,7 +802,12 @@ class AvailabilityTests(unittest.TestCase):
         for login in (self.login, self.login_manager, self.login_administrator):
             with self.subTest(login=login.__name__):
                 login()
-                response = self.client.get("/availability")
+                if login == self.login:
+                    response = self.client.get("/availability/101")
+                elif login == self.login_manager:
+                    response = self.client.get("/availability/202")
+                else:
+                    response = self.client.get("/availability/303")
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(b'id="newTimeOffButton"', response.data)
                 self.assertIn(b'id="timeOffModal"', response.data)
@@ -814,36 +817,21 @@ class AvailabilityTests(unittest.TestCase):
         for login in (self.login_manager, self.login_administrator):
             with self.subTest(login=login.__name__):
                 login()
-                with self.client.session_transaction() as session_data:
-                    session_data["availability_employee"] = 101
-                response = self.client.get("/availability")
+                response = self.client.get("/availability/101")
                 self.assertEqual(response.status_code, 200)
                 self.assertNotIn(b'id="newTimeOffButton"', response.data)
                 self.assertNotIn(b'id="timeOffModal"', response.data)
                 self.assertIn(b'id="calendar"', response.data)
                 self.client.get("/logout")
 
-    def test_create_time_off_request_uses_selected_employee_for_manager(self):
+    def test_create_time_off_request_uses_current_user_for_submission(self):
         self.login_manager()
-        with self.client.session_transaction() as session_data:
-            session_data["availability_employee"] = 101
         response = self.client.post(
             "/api/time-off-requests",
             json={"start_date": date.today().isoformat(), "end_date": date.today().isoformat()},
         )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(self.read_rows("SELECT employee_id FROM TimeOffRequests"), [(101,)])
-
-    def test_create_time_off_request_rejects_inaccessible_employee(self):
-        self.login_manager()
-        with self.client.session_transaction() as session_data:
-            session_data["availability_employee"] = 999
-        response = self.client.post(
-            "/api/time-off-requests",
-            json={"start_date": "2026-11-23", "end_date": "2026-11-23"},
-        )
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(self.read_rows("SELECT * FROM TimeOffRequests"), [])
+        self.assertEqual(self.read_rows("SELECT employee_id FROM TimeOffRequests"), [(202,)])
 
     def test_create_time_off_request_requires_login(self):
         response = self.client.post(
@@ -1120,7 +1108,7 @@ class AvailabilityTests(unittest.TestCase):
     def test_availability_page_renders_calendar_events_and_controls(self):
         self.login()
 
-        response = self.client.get("/availability")
+        response = self.client.get("/availability/101")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b'"title": "Morning Shift"', response.data)
@@ -1135,14 +1123,14 @@ class AvailabilityTests(unittest.TestCase):
     def test_availability_route_creates_then_updates_calendar_event(self):
         self.login()
 
-        created = self.client.post("/availability", json=self.calendar_event())
+        created = self.client.post("/availability/101", json=self.calendar_event())
 
         self.assertEqual(created.status_code, 200)
         availability_id = created.get_json()["id"]
         self.assertEqual(availability_id, 3)
 
         updated = self.client.post(
-            "/availability",
+            "/availability/101",
             json=self.calendar_event(id=availability_id, availability=2),
         )
 
@@ -1162,10 +1150,10 @@ class AvailabilityTests(unittest.TestCase):
         self.login()
 
         invalid = self.client.post(
-            "/availability", json=self.calendar_event(availability=True)
+            "/availability/101", json=self.calendar_event(availability=True)
         )
         other_employees_record = self.client.post(
-            "/availability",
+            "/availability/202",
             json=self.calendar_event(
                 id=2,
                 shift_name="Evening Shift",
@@ -1176,7 +1164,7 @@ class AvailabilityTests(unittest.TestCase):
 
         self.assertEqual(invalid.status_code, 400)
         self.assertEqual(invalid.get_json()["status"], "error")
-        self.assertEqual(other_employees_record.status_code, 404)
+        self.assertEqual(other_employees_record.status_code, 403)
         self.assertEqual(
             self.read_rows(
                 "SELECT availability FROM EmployeeAvailability "
@@ -1199,11 +1187,11 @@ class AvailabilityTests(unittest.TestCase):
             "availability.AvailabilityRoutes.get_db_connection",
             side_effect=open_connection,
         ):
-            self.assertEqual(self.client.get("/availability").status_code, 200)
-            self.assertEqual(self.client.get("/avail_select").status_code, 302)
+            self.assertEqual(self.client.get("/availability/101").status_code, 200)
+            self.assertEqual(self.client.get("/availability").status_code, 302)
             self.assertEqual(
                 self.client.post(
-                    "/availability",
+                    "/availability/101",
                     json=self.calendar_event(availability=True),
                 ).status_code,
                 400,
@@ -1214,12 +1202,12 @@ class AvailabilityTests(unittest.TestCase):
                 side_effect=RuntimeError("test failure"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "test failure"):
-                    self.client.get("/availability")
+                    self.client.get("/availability/101")
             with patch(
                 "availability.AvailabilityRoutes._build_availability_service",
                 side_effect=RuntimeError("construction failure"),
             ):
-                for url in ("/availability", "/avail_select"):
+                for url in ("/availability/101", "/availability"):
                     with self.subTest(url=url):
                         with self.assertRaisesRegex(RuntimeError, "construction failure"):
                             self.client.get(url)
@@ -1231,50 +1219,40 @@ class AvailabilityTests(unittest.TestCase):
 
     def test_associate_availability_selector_redirects_to_own_availability(self):
         self.login()
-        with self.client.session_transaction() as session:
-            session["availability_employee"] = 202
 
-        response = self.client.get("/avail_select")
+        response = self.client.get("/availability")
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, "/availability")
-        with self.client.session_transaction() as session:
-            self.assertEqual(session["availability_employee"], 101)
+        self.assertEqual(response.location, "/availability/101")
 
     def test_manager_availability_selector_lists_only_associates(self):
         self.login_manager()
 
-        response = self.client.get("/avail_select")
+        response = self.client.get("/availability")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"April Example (ID: 101)", response.data)
         self.assertNotIn(b"Bob Example (ID: 202)", response.data)
         self.assertIn(b"My Availability", response.data)
 
-    def test_manager_selection_saves_employee_and_redirects(self):
+    def test_manager_selection_redirects_to_employee_detail(self):
         self.login_manager()
 
-        response = self.client.post("/avail_select", data={"employee_id": "101"})
+        response = self.client.get("/availability/101")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, "/availability")
-        with self.client.session_transaction() as session:
-            self.assertEqual(session["availability_employee"], 101)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"April Example", response.data)
 
-    def test_manager_can_select_own_availability(self):
+    def test_manager_can_view_own_availability(self):
         self.login_manager()
 
-        response = self.client.post("/avail_select", data={"employee_id": "202"})
+        response = self.client.get("/availability/202")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, "/availability")
-        with self.client.session_transaction() as session:
-            self.assertEqual(session["availability_employee"], 202)
-
-        self.assertEqual(self.client.get("/availability").status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Bob Example", response.data)
 
         created = self.client.post(
-            "/availability", json=self.calendar_event()
+            "/availability/202", json=self.calendar_event()
         )
         self.assertEqual(created.status_code, 200)
         self.assertEqual(
@@ -1286,39 +1264,39 @@ class AvailabilityTests(unittest.TestCase):
             [(202,)],
         )
 
-    def test_manager_cannot_open_unknown_availability_with_stale_session(self):
+    def test_manager_cannot_view_unknown_employee_availability(self):
         self.login_manager()
-        with self.client.session_transaction() as session:
-            session["availability_employee"] = 999
 
-        response = self.client.get("/availability")
+        response = self.client.get("/availability/999")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, "/avail_select")
-        with self.client.session_transaction() as session:
-            self.assertNotIn("availability_employee", session)
+        self.assertEqual(response.status_code, 403)
+
+    def test_manager_cannot_view_other_manager_availability(self):
+        self.login_manager()
+
+        response = self.client.post("/availability/202")
+
+        self.assertEqual(response.status_code, 404)
 
     def test_manager_cannot_select_an_unknown_employee(self):
         self.login_manager()
 
-        response = self.client.post("/avail_select", data={"employee_id": "999"})
+        response = self.client.get("/availability/999")
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 403)
 
-    def test_administrator_can_select_any_employee_level(self):
+    def test_administrator_can_view_any_employee(self):
         self.login_administrator()
 
-        selector_response = self.client.get("/avail_select")
+        selector_response = self.client.get("/availability")
         self.assertEqual(selector_response.status_code, 200)
         self.assertIn(b"April Example (ID: 101)", selector_response.data)
         self.assertIn(b"Bob Example (ID: 202)", selector_response.data)
 
-        response = self.client.post("/avail_select", data={"employee_id": "202"})
+        response = self.client.get("/availability/202")
 
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, "/availability")
-        with self.client.session_transaction() as session:
-            self.assertEqual(session["availability_employee"], 202)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Bob Example", response.data)
 
 
 if __name__ == "__main__":

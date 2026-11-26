@@ -206,6 +206,11 @@ CREATE TABLE IF NOT EXISTS ShiftAssignments(
 )
 """)
 
+"""Availability:
+    0 = Not available
+    1 = Available
+    2 = Unset
+"""
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS EmployeeAvailability(
         employee_availability_id INTEGER PRIMARY KEY AUTOINCREMENT,
