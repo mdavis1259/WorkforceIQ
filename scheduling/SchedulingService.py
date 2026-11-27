@@ -378,11 +378,11 @@ class SchedulingService:
 
             for forecast in forecasts:
 
-                forecast_date = forecast["forecast_date"]
+                forecast_date = forecast.forecast_date
 
                 if forecast_date in summary["daily_labor_cost"]:
 
-                    budget = forecast["labor_budget"]
+                    budget = forecast.labor_budget
 
                     actual = summary["daily_labor_cost"][forecast_date]
 
