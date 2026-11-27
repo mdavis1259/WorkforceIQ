@@ -72,3 +72,39 @@ class ResponseBuilder:
         return {"status": status, "query_type": query_type, "answer": answer,
                 "employees": employees, "validation": validation,
                 "degraded": degraded}
+
+
+    def budget_answer(self, intent, budget, checked):
+        """Answer SCHEDULE_WITHIN_BUDGET from the saved schedule and the
+        forecast labor budget. Only totals and per-day figures are returned;
+        employee wages are never included."""
+        if not checked["passed"]:
+            return self._base("unsupported", intent["query_type"],
+                              "The budget figures did not pass the rule "
+                              "check, so I will not report them.", [], False,
+                              intent.get("degraded", False))
+        cost = budget["projected_labor_cost"]
+        plan = budget["labor_budget"]
+        gap = abs(round(plan - cost, 2))
+        week = budget["week_start"]
+        if budget["within_budget"]:
+            verdict = f"within budget with ${gap:,.2f} to spare"
+        else:
+            verdict = f"over budget by ${gap:,.2f}"
+        answer = (f"The projected labor cost for the week of {week} is "
+                  f"${cost:,.2f} against a labor budget of ${plan:,.2f}: "
+                  f"{verdict}.")
+        if budget["draft_forecast"]:
+            answer += " The forecast it is based on is not approved yet."
+        response = self._base("answered", intent["query_type"], answer, [],
+                              True, intent.get("degraded", False))
+        if checked["violations"]:
+            response["validation"]["over_budget_days"] = checked["violations"]
+        response["budget"] = {
+            "week_start": week,
+            "projected_labor_cost": cost,
+            "labor_budget": plan,
+            "within_budget": budget["within_budget"],
+            "days": budget["days"],
+        }
+        return response

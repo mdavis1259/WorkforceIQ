@@ -284,6 +284,7 @@ Open **AI Assistant** in the navigation bar. It is available to Managers and Adm
 |---|---|---|
 | Who is available for a shift | "Who is available to cover the Friday evening shift?" | Employees marked available for that shift, with their role |
 | Who is qualified | "Who is qualified as an associate?" or "Who is qualified for the evening shift on Friday?" | Employees with that role or qualification (and available, if a shift is named) |
+| Is a week within budget | "Is next week within budget?" or "Is the schedule for 2026-11-30 within budget?" | Projected labor cost for the week (hours × hourly rate from the saved schedule) compared with the forecast labor budget, with a within-budget or over-budget verdict |
 
 Tips for good questions:
 
@@ -291,12 +292,14 @@ Tips for good questions:
 - Name the shift: the morning, afternoon, or evening shift.
 - Optionally name a role or qualification, such as Associate or First Aid / CPR.
 - Questions must be 3 to 500 characters.
+- For budget questions, say the week: `this week`, `next week`, `last week`, or a date like `2026-11-30`.
+- A budget answer needs a generated schedule and a saved forecast for that week. If either is missing, the assistant says which one to create first.
+- If the forecast has not been approved yet, the answer says so.
 
 If the question is missing a detail, the assistant asks for it (for example, "Which day do you mean?"). If it is not one of the supported types, it lists the supported types.
 
 ### Not available in this Alpha
 
-- **Budget questions** (for example, "Is next week within budget?"). The assistant replies that the budget check is not available yet. Connecting it to the Scheduling and labor cost data is planned after the Alpha.
 - Questions about wages or hourly rates. Wages are never sent to the AI model or shown in its answers.
 - Changing schedules or employee records.
 
@@ -352,7 +355,7 @@ Llama 3.2 (through Ollama) only works out what the manager is asking. The answer
 - Pipeline: intent parsing, query planning, rule validation, response building
 - Local Llama 3.2 through Ollama, with a keyword-parser fallback
 - Read-only and manager-only; no employee records or wages are sent to the model
-- Budget questions are not connected yet (see Known Limitations)
+- Answers whether a week's schedule stays within the forecast labor budget, using saved schedule assignments and forecast data (read-only; totals only, no individual wages)
 - Endpoints: `POST /api/assistant/query` and `GET /api/assistant/health`
 
 ---
@@ -368,7 +371,7 @@ Current limitations include:
 - Limited reporting functionality
 - Limited schedule optimization rules
 - Ongoing SDS feature implementation
-- AI Assistant budget questions are not connected to scheduling data yet
+- AI Assistant budget answers compare the whole week's forecast budget with the cost of the saved assignments, so a partly filled schedule can look well under budget
 - AI Assistant availability matches the weekly shift pattern, not individual dates
 
 ---

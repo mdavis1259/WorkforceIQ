@@ -13,6 +13,7 @@ import re
 from datetime import date, datetime, timedelta
 
 from assistant.OllamaClient import OllamaError
+from assistant.WeekResolver import resolve_week
 
 ALLOWED_QUERY_TYPES = (
     "AVAILABLE_FOR_SHIFT",
@@ -214,7 +215,8 @@ class IntentParser:
             # Dates come from the question text, not from the model.
             day = find_day_in_question(question, today)
             intent["date"] = day
-            intent["week_start"] = (day if intent["query_type"] ==
+            intent["week_start"] = (resolve_week(question, today)
+                                    if intent["query_type"] ==
                                     "SCHEDULE_WITHIN_BUDGET" else None)
             intent["degraded"] = False
             return intent
@@ -224,5 +226,7 @@ class IntentParser:
             intent = {"query_type": UNSUPPORTED, "date": None,
                       "shift_name": None, "role_name": None,
                       "week_start": None}
+        if intent["query_type"] == "SCHEDULE_WITHIN_BUDGET":
+            intent["week_start"] = resolve_week(question, today)
         intent["degraded"] = True
         return intent

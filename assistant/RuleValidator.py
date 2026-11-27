@@ -36,3 +36,22 @@ class RuleValidator:
             else:
                 passed.append(employee)
         return {"employees": passed, "violations": violations}
+
+
+    def validate_budget(self, budget):
+        """Re-check the budget numbers (SDS rule BUDGET). Returns
+        {"passed": bool, "violations": [...]}: passed is False if the totals
+        do not match the daily figures; each over-budget day is listed."""
+        days = budget["days"]
+        cost = round(sum(d["labor_cost"] for d in days), 2)
+        plan = round(sum(d["labor_budget"] for d in days
+                         if d["labor_budget"] is not None), 2)
+        consistent = (abs(cost - budget["projected_labor_cost"]) < 0.01
+                      and abs(plan - budget["labor_budget"]) < 0.01)
+        violations = [
+            {"rule": "BUDGET", "employee_id": None,
+             "issue": f"{d['date']} is over its daily budget by "
+                      f"${-d['variance']:,.2f}"}
+            for d in days if d["variance"] is not None and d["variance"] < 0
+        ]
+        return {"passed": consistent, "violations": violations}
