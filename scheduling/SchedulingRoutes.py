@@ -1,10 +1,12 @@
 from flask import (
     Blueprint,
+    jsonify,
     render_template,
     request,
     redirect,
     url_for
 )
+from dataclasses import asdict
 from datetime import datetime, timedelta
 from flask_login import login_required
 from database.connection import get_db_connection
@@ -298,11 +300,11 @@ def schedule_workbench():
                 forecast_status = "draft"
                 
 
-                forecast_summary = {
-                    "projected_sales": sum(f.projected_sales for f in week_forecasts),
-                    "required_labor_hours": sum(f.required_labor_hours for f in week_forecasts),
-                    "labor_budget": sum(f.labor_budget for f in week_forecasts)
-                }
+            forecast_summary = {
+                "projected_sales": sum(f.projected_sales for f in week_forecasts),
+                "required_labor_hours": sum(f.required_labor_hours for f in week_forecasts),
+                "labor_budget": sum(f.labor_budget for f in week_forecasts)
+            }
 
             # Schedule
             schedule = service.get_schedule(week_start)
@@ -324,3 +326,33 @@ def schedule_workbench():
     finally:
         if conn:
             conn.close()
+
+@scheduling_bp.route(
+    "/api/schedules/shifts/<int:shift_id>",
+    methods=["GET"]
+)
+@login_required
+def get_shift_details(shift_id):
+
+    service, conn = _build_scheduling_service()
+
+    try:
+
+        schedule_id = int(request.args["schedule_id"])
+
+        workday_id = int(request.args["workday_id"])
+
+        schedule_date = request.args["schedule_date"]
+
+        details = service.get_shift_details(schedule_id, shift_id, schedule_date, workday_id)
+
+        return jsonify({
+            "required_count": details["required_count"],
+            "assigned_count": details["assigned_count"],
+            "open_slots": details["open_slots"],
+            "requirements": [asdict(r) for r in details["requirements"]],
+            "assignments": [asdict(a) for a in details["assignments"]]
+        })
+
+    finally:
+        conn.close()

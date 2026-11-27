@@ -110,6 +110,24 @@ class SchedulingService:
 
         self.scheduling_repository.delete_shift(shift_id)
 
+    def get_shift_details(self, schedule_id, shift_id, schedule_date, workday_id):
+
+        assignments = self.scheduling_repository.get_assignments_for_shift(schedule_id, shift_id, schedule_date)
+
+        requirements = self.scheduling_repository.get_requirements_for_shift(workday_id, shift_id)
+
+        required_count = sum(r.required_count for r in requirements)
+
+        assigned_count = len(assignments)
+
+        return {
+            "required_count": required_count,
+            "assigned_count": assigned_count,
+            "open_slots": required_count - assigned_count,
+            "requirements": requirements,
+            "assignments": assignments
+        }
+
     # ==========================================
     # STAFFING REQUIREMENTS
     # ==========================================

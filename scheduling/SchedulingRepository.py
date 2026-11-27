@@ -9,6 +9,7 @@ Scheduling owns:
     - Shifts
     - Staffing Requirements
 """
+from scheduling.Shift import (ShiftRequirement, ShiftAssignment)
 
 class SchedulingRepository:
 
@@ -379,6 +380,62 @@ class SchedulingRepository:
         """, (schedule_id,))
 
         return cursor.fetchall()
+
+    def get_assignments_for_shift(self, schedule_id, shift_id, schedule_date):
+        
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                sa.assignment_id,
+                sa.employee_id,
+                sa.role_id,
+                e.first_name,
+                e.last_name,
+                r.role_name,
+                sa.hours
+            FROM ShiftAssignments sa
+            JOIN Employees e
+                ON sa.employee_id = e.employee_id
+            JOIN Roles r
+                ON sa.role_id = r.role_id
+            WHERE sa.schedule_id = ?
+            AND sa.shift_id = ?
+            AND sa.schedule_date = ?
+        """, (schedule_id, shift_id, schedule_date))
+
+        return [
+            ShiftAssignment(
+                employee_name=f"{row['first_name']} {row['last_name']}",
+                role_name=row["role_name"],
+                hours=row["hours"]
+            )
+            for row in cursor.fetchall()
+        ]
+
+    def get_requirements_for_shift(self, workday_id, shift_id):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                sr.requirement_id,
+                sr.required_count,
+                r.role_name
+            FROM StaffingRequirements sr
+            JOIN Roles r
+                ON sr.role_id = r.role_id
+            WHERE sr.workday_id = ?
+            AND sr.shift_id = ?
+        """, (workday_id, shift_id))
+
+        return [
+            ShiftRequirement(
+                role_name=row["role_name"],
+                required_count=row["required_count"]
+            )
+            for row in cursor.fetchall()
+        ]
     
     def get_staffing_requirement_rows(self):
 

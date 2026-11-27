@@ -452,23 +452,51 @@ document.addEventListener("DOMContentLoaded", function () {
 
             events: [
                 {
+                    id: 1,
                     title: "Morning Shift (3/4)",
                     start: "2026-11-16T08:00:00",
-                    end: "2026-11-16T12:00:00"
+                    end: "2026-11-16T12:00:00",
+                    extendedProps: {
+                        scheduleId: 1,
+                        workdayId: 1,
+                        scheduleDate: "2026-11-16"
+                    }
                 },
                 {
+                    id: 2,
                     title: "Afternoon Shift (4/4)",
                     start: "2026-11-16T12:00:00",
-                    end: "2026-11-16T16:00:00"
+                    end: "2026-11-16T16:00:00",
+                    extendedProps: {
+                        scheduleId: 1,
+                        workdayId: 1,
+                        scheduleDate: "2026-11-16"
+                    }
                 }
             ],
 
-            eventClick: function() {
+            eventClick: async function(info) {
 
-                const modal =
-                    new bootstrap.Modal(
-                        document.getElementById("shiftModal")
-                    );
+                const shiftId = info.event.id;
+
+                const scheduleId = info.event.extendedProps.scheduleId;
+
+                const workdayId = info.event.extendedProps.workdayId;
+
+                const scheduleDate = info.event.extendedProps.scheduleDate;
+
+                const response = await fetch(
+                    `/api/schedules/shifts/${shiftId}`
+                    + `?schedule_id=${scheduleId}`
+                    + `&workday_id=${workdayId}`
+                    + `&schedule_date=${scheduleDate}`
+                );
+
+                const data = await response.json();
+
+                populateModal(data);
+
+                const modal = new bootstrap.Modal(document.getElementById("shiftModal"));
 
                 modal.show();
             }
@@ -477,6 +505,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     calendar.render();
 });
+
+function populateModal(data) {
+    document.getElementById("shiftTitle").textContent = data.shift_name;
+    document.getElementById("shiftDate").textContent = data.workday;
+};
 
 function loadWeek() {
     const weekStart = document.getElementById("weekStart").value;

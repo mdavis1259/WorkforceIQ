@@ -14,7 +14,7 @@
             <h2>{% if level == 1 %}View Schedule{% else %}Manage Schedule{% endif %}</h2>
             <p>{% if level == 1 %}View the upcoming schedule.{% else %}Create and modify the schedule.{% endif %}</p>
 
-            <a href="{{ url_for('scheduling.schedule')}}">
+            <a href="{{ url_for('scheduling.schedule_workbench')}}">
                 <button class="btn">Open Module</button>
             </a>
         </div>
