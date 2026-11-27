@@ -1,6 +1,7 @@
 import uuid
 import hmac
 import secrets
+from datetime import (datetime, timedelta)
 from flask import (jsonify, render_template, redirect, request, session, url_for, Blueprint)
 from flask_login import (login_required, current_user)
 from functools import wraps
@@ -117,28 +118,40 @@ def _build_forecast_service():
 @manager_required
 def forecast():
 
+    if request.method == "POST":
+        week_start = request.form["week_start"]
+
+        return redirect(url_for("forecast.forecast", week_start=week_start))
+
     conn = None
 
     try:
         service, conn = _build_forecast_service()
 
-        forecasts = []
+        selected_week_start = request.args.get("week_start")
 
-        if request.method == "POST":
-            
-            week_start = request.form["week_start"]
+        # First visit to page
+        if not selected_week_start:
+            forecasts = []
 
-            forecasts = service.generate_forecast(week_start)
+            return render_template("forecast.html", forecasts=forecasts, selected_week_start="")
 
-        else:
+        # Retrieve selected forecast period
+        start_date = datetime.strptime(selected_week_start, "%Y-%m-%d")
 
-            forecasts = service.generate_forecast()
+        end_date = (start_date + timedelta(days=13)).strftime("%Y-%m-%d")
+
+        forecasts = service.get_range(selected_week_start, end_date)
+
+        # If no forecasts exist yet, generate them
+        if not forecasts:
+            forecasts = service.generate_forecast(selected_week_start)
+
+        return render_template("forecast.html", forecasts=forecasts, selected_week_start=selected_week_start)
 
     finally:
         if conn:
             conn.close()
-
-    return render_template("forecast.html", forecasts=forecasts)
 
 @forecasting_bp.route(
     "/forecast/update",
@@ -170,7 +183,7 @@ def update_forecast():
         conn.close()
 
     return redirect(
-        url_for("forecast.forecast")
+        url_for("forecast.forecast", week_start=request.form["week_start"])
     )
 
 @forecasting_bp.route(
@@ -200,7 +213,7 @@ def recalculate_forecast():
         if conn:
             conn.close()
 
-    return redirect(url_for("forecast.forecast"))
+    return redirect(url_for("forecast.forecast", week_start=request.form["week_start"]))
 
 @forecasting_bp.route(
     "/forecast/approve",
@@ -214,15 +227,23 @@ def approve_forecast():
 
     try:
         service, conn = _build_forecast_service()
+
+        forecast_id = request.form.get("forecast_id")
         
-        forecast_id = int(request.form["forecast_id"])
+        print("Forecast ID: " + forecast_id)
+
+        if not forecast_id or forecast_id == "None":
+            
+            raise ValueError("Forecast ID missing from approve request")
+
+        forecast_id = int(forecast_id)
 
         service.approve_forecast(forecast_id)
     finally:
         if conn:
             conn.close()
 
-    return redirect(url_for("forecast.forecast"))
+    return redirect(url_for("forecast.forecast", week_start=request.form["week_start"]))
 
 @forecasting_bp.route(
     "/api/forecasts/submit", methods=["POST"]

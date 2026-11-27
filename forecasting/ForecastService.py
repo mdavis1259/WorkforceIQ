@@ -91,7 +91,7 @@ class ForecastService:
                 f"budget={labor_budget}"
             )
 
-            self.repository.save_forecast(
+            forecast_id = self.repository.save_forecast(
                 forecast_date,
                 round(prediction, 2),
                 round(
@@ -109,6 +109,7 @@ class ForecastService:
 
             forecasts.append(
                 Forecast(
+                    forecast_id=forecast_id,
                     forecast_date=forecast_date,
                     projected_sales=round(prediction, 2),
                     projected_sales_low=round(prediction - (standard_deviation * uncertainty), 2),
@@ -137,6 +138,15 @@ class ForecastService:
         self.repository.update_forecast(forecast_id, projected_sales, labor_budget)
 
     def approve_forecast(self, forecast_id):
+
+        if not forecast_id or forecast_id == "None":
+            return api_error(
+                400,
+                "VALIDATION_ERROR",
+                "Missing forecast_id"
+            )
+
+        forecast_id = int(forecast_id)
 
         self.repository.approve_forecast(forecast_id)
 

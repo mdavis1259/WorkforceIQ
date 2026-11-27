@@ -5,14 +5,13 @@ from flask import (
     redirect,
     url_for
 )
-
+from datetime import datetime, timedelta
 from flask_login import login_required
 from database.connection import get_db_connection
 from employee_management.EmployeeService import EmployeeService
 from employee_management.EmployeeRepository import EmployeeRepository
 from scheduling.SchedulingRepository import SchedulingRepository
 from scheduling.SchedulingService import SchedulingService
-from availability.AvaliabilityRepository import AvaliabilityRepository
 from availability.AvailabilityService import AvailabilityService
 from forecasting.ForecastRepository import ForecastRepository
 from forecasting.ForecastService import ForecastService
@@ -34,12 +33,11 @@ def _build_scheduling_service():
     # Instantiate repositories for service instantiation
     scheduling_repository = SchedulingRepository(conn)
     employee_repository = EmployeeRepository(conn)
-    availability_repository = AvailabliityRepostiory(conn)
+    availability_repository = AvailabilityRepository(conn)
     forecasting_repository = ForecastRepository(conn)
 
 
     employee_service = EmployeeService(employee_repository)
-    availability_service = AvailabilityService(availability_repository)
     forecasting_service = ForecastService(forecasting_repository)
     availability_repository = AvailabilityRepository(conn)
     availability_service = AvailabilityService(availability_repository, employee_service)
@@ -254,33 +252,74 @@ def generate_schedule():
 
 @scheduling_bp.route("/schedule")
 @login_required
-def schedule():
+def schedule_workbench():
 
     service, conn = _build_scheduling_service()
 
     try:
 
+        week_start = request.args.get("week_start")
+
         schedule = None
         assignments = []
 
-        summary = {
-            "requirements_processed": 0,
-            "employees_considered": 0,
-            "employees_assigned": 0,
-            "unfilled_requirements": 0,
-            "requirements": []
+        forecast_status = "missing"
+        
+        forecast_summary = {
+                "projected_sales": 0,
+                "required_labor_hours": 0,
+                "labor_budget": 0
         }
 
-        week_start = request.args.get("week_start")
+        week_forecasts = []
 
         if week_start:
 
+            # Forecast
+            start_date = datetime.strptime(week_start, "%Y-%m-%d")
+
+            end_date = start_date + timedelta(days=6)
+
+
+            week_forecasts = (
+                service.forecasting_service.get_range(
+                    start_date.strftime("%Y-%m-%d"), 
+                    end_date.strftime("%Y-%m-%d")
+                )
+            )
+
+            if week_forecasts and all(f.status == "Approved" for f in week_forecasts):
+                forecast_status = "approved"
+            
+            elif any(f.status == "Approved" for f in week_forecasts):
+                forecast_status = "partial"
+            
+            else:
+                forecast_status = "draft"
+                
+
+                forecast_summary = {
+                    "projected_sales": sum(f.projected_sales for f in week_forecasts),
+                    "required_labor_hours": sum(f.required_labor_hours for f in week_forecasts),
+                    "labor_budget": sum(f.labor_budget for f in week_forecasts)
+                }
+
+            # Schedule
             schedule = service.get_schedule(week_start)
 
             if schedule:
-
                 assignments = service.get_assignments(schedule["schedule_id"])
-        return render_template("schedule_ui.html", schedule=schedule, assignments=assignments)
+
+        return render_template(
+            "schedule_ui.html", 
+            week_start=week_start,
+            schedule=schedule, 
+            assignments=assignments,
+            forecast_status=forecast_status,
+            forecast_summary=forecast_summary,
+            forecasts=week_forecasts,
+            today=datetime.today().strftime("%Y-%m-%d")    
+        )
     
     finally:
         if conn:

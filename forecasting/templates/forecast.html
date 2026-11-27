@@ -291,6 +291,11 @@
 
         </div>
 
+            <input
+                type="hidden"
+                name="week_start"
+                value="{{ selected_week_start }}">
+
         <button type="submit">
            Update Forecast
         </button>
@@ -313,8 +318,16 @@
         name="csrf_token"
         value="{{ csrf_token() }}"
     >                             
-<label>Forecast Start Date</label>
-<input type="date" name="week_start" required>
+
+    <label>Forecast Start Date</label>
+
+    <input 
+        type="date" 
+        name="week_start" 
+        value="{{ selected_week_start }}" 
+        required
+    >
+
 <button type="submit">Retrieve Forecast</button>
 </form>
 
@@ -370,6 +383,12 @@
                 >
 
                 <input
+                    type="hidden"
+                    name="week_start"
+                    value="{{ selected_week_start }}"
+                >
+
+                <input
                     type="number"
                     name="projected_sales"
                     value="{{ forecast.projected_sales }}"
@@ -419,6 +438,11 @@
                 type="hidden"
                 name="forecast_id"
                 value="{{ forecast.forecast_id }}">
+
+            <input
+                type="hidden"
+                name="week_start"
+                value="{{ selected_week_start }}">
 
             <button type="submit">
                 Approve

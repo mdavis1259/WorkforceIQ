@@ -2,62 +2,54 @@
 
 {% block content %}
 
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+
 <div class="container-fluid">
 
-    <!-- Schedule Header -->
+    <!-- Page Header -->
+
+    <div class="mb-4">
+        <h1>Schedule Workbench</h1>
+        <p class="text-muted">
+            Generate, review, edit, and approve weekly schedules.
+        </p>
+    </div>
+
+    <!-- Week Selection -->
 
     <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            Week Selection
+        </div>
+
         <div class="card-body">
 
-            <div class="d-flex justify-content-between align-items-center">
+            <div class="row align-items-end">
 
-                <div>
-                    <h2>Schedule Workbench</h2>
-                    <p class="mb-0">
-                        Week of November 16, 2026
-                    </p>
+                <div class="col-md-4">
+
+                    <label class="form-label">
+                        Week Start Date
+                    </label>
+
+                    <input
+                        type="date"
+                        id="weekStart"
+                        class="form-control"
+                        value="{{ week_start }}"
+                    >
+
                 </div>
 
-                <div class="text-end">
-                    <div><strong>Status:</strong> Draft 🔴</div>
-                    <div><strong>Unfilled Slots:</strong> 2</div>
-                </div>
+                <div class="col-md-2">
 
-            </div>
-
-            <hr>
-
-            <div class="row text-center">
-
-                <div class="col-md-3">
-                    <h6>Weekly Budget</h6>
-                    <div class="fs-4 text-success">
-                        $8,700
-                    </div>
-                </div>
-
-                <div class="col-md-3">
-                    <h6>Weekly Labor Cost</h6>
-                    <div class="fs-4">
-                        $8,150
-                    </div>
-                </div>
-
-                <div class="col-md-3">
-                    <h6>Variance</h6>
-                    <div class="fs-4 text-success">
-                        +$550
-                    </div>
-                </div>
-
-                <div class="col-md-3">
-                    <button class="btn btn-primary">
-                        Generate Schedule
+                    <button
+                        class="btn btn-outline-primary w-100"
+                        onclick="loadWeek()">
+                        Load Week
                     </button>
 
-                    <button class="btn btn-success">
-                        Approve Schedule
-                    </button>
                 </div>
 
             </div>
@@ -65,15 +57,154 @@
         </div>
     </div>
 
+    <!-- Forecast Status -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header">
+            Forecast Status
+        </div>
+
+        <div class="card-body">
+
+            <div class="row text-center">
+
+                <div class="col-md-3">
+                    <h6>Status</h6>
+                    {% if forecast_status == "approved" %}
+                    <div class="text-success">
+                        Approved ✅
+                    </div>
+                    {% elif forecast_status == "partial" %}
+                    <div class="text-warning">
+                        Partially Approved ⚠️
+                    </div>
+                    {% else %}
+                    <div class="text-danger">
+                        Missing ❌
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="col-md-3">
+                    <h6>Projected Sales</h6>
+                    <div class="fs-5">
+                        ${{ "{:,.2f}".format(forecast_summary.projected_sales) }}
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <h6>Required Labor Hours</h6>
+                    <div class="fs-5">
+                        {{ forecast_summary.required_labor_hours }}
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <h6>Labor Budget</h6>
+                    <div class="fs-5">
+                        ${{ "{:,.2f}".format(forecast_summary.labor_budget) }}
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Schedule Summary -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-header">
+            Schedule Summary
+        </div>
+
+        <div class="card-body">
+
+            <div class="row text-center">
+
+                <div class="col-md-2">
+                    <h6>Status</h6>
+                    <div class="text-danger">
+                        Draft 🔴
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <h6>Unfilled Slots</h6>
+                    <div class="fs-5 text-warning">
+                        2
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <h6>Projected Labor Cost</h6>
+                    <div class="fs-5">
+                        $6,200
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <h6>Budget</h6>
+                    <div class="fs-5">
+                        $6,860
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <h6>Variance</h6>
+                    <div class="fs-5 text-success">
+                        +$660
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Actions -->
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-body text-end">
+
+            <button
+                class="btn btn-primary"
+                id="generateScheduleBtn">
+                Generate Draft Schedule
+            </button>
+
+            <button
+                class="btn btn-success"
+                id="approveScheduleBtn">
+                Approve Schedule
+            </button>
+
+        </div>
+
+    </div>
 
     <!-- Calendar -->
 
-    <div id="calendar"></div>
+    <div class="card shadow-sm">
+
+        <div class="card-header">
+            Weekly Schedule
+        </div>
+
+        <div class="card-body">
+
+            <div id="calendar"></div>
+
+        </div>
+
+    </div>
 
 </div>
-
-
-
 
 
 <!-- Shift Modal -->
@@ -81,10 +212,9 @@
 <div
     class="modal fade"
     id="shiftModal"
-    tabindex="-1"
->
+    tabindex="-1">
 
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-lg">
 
         <div class="modal-content">
 
@@ -92,11 +222,11 @@
 
                 <div>
 
-                    <h4>
-                        Morning Shift
+                    <h4 id="shiftTitle">
+                        Shift Details
                     </h4>
 
-                    <small>
+                    <small id="shiftDate">
                         Monday, November 16, 2026
                     </small>
 
@@ -105,20 +235,19 @@
                 <button
                     type="button"
                     class="btn-close"
-                    data-bs-dismiss="modal"
-                ></button>
+                    data-bs-dismiss="modal">
+                </button>
 
             </div>
 
             <div class="modal-body">
 
+                <!-- Shift Status -->
 
-                <!-- Forecast Information -->
-
-                <div class="card mb-4">
+                <div class="card mb-3">
 
                     <div class="card-header">
-                        Daily Forecast
+                        Shift Summary
                     </div>
 
                     <div class="card-body">
@@ -126,18 +255,31 @@
                         <div class="row text-center">
 
                             <div class="col">
-                                <h6>Forecast Sales</h6>
-                                <div>$4,850</div>
+                                <h6>Status</h6>
+                                <div>
+                                    Draft
+                                </div>
                             </div>
 
                             <div class="col">
-                                <h6>Required Hours</h6>
-                                <div>88</div>
+                                <h6>Required</h6>
+                                <div>
+                                    4
+                                </div>
                             </div>
 
                             <div class="col">
-                                <h6>Labor Budget</h6>
-                                <div>$873</div>
+                                <h6>Assigned</h6>
+                                <div>
+                                    3
+                                </div>
+                            </div>
+
+                            <div class="col">
+                                <h6>Open Slots</h6>
+                                <div class="text-warning">
+                                    1
+                                </div>
                             </div>
 
                         </div>
@@ -146,84 +288,92 @@
 
                 </div>
 
+                <!-- Assignments -->
 
-                <!-- Staffing -->
-
-                <div class="card mb-4">
+                <div class="card mb-3">
 
                     <div class="card-header">
-                        Staffing Requirements
+                        Assignments
                     </div>
 
                     <div class="card-body">
 
-                        <h6>
-                            Manager (1 Required)
-                        </h6>
+                        <table class="table">
 
-                        <select class="form-select mb-4">
-                            <option>
-                                Bob Manager
-                            </option>
-                        </select>
+                            <thead>
 
-                        <h6>
-                            Associates (3 Required)
-                        </h6>
+                                <tr>
+                                    <th>Role</th>
+                                    <th>Employee</th>
+                                </tr>
 
-                        <div class="mb-3">
-                            <label>Associate Slot 1</label>
+                            </thead>
 
-                            <select class="form-select">
-                                <option>
-                                    April Associate
-                                </option>
-                            </select>
-                        </div>
+                            <tbody>
 
-                        <div class="mb-3">
-                            <label>Associate Slot 2</label>
+                                <tr>
+                                    <td>Manager</td>
+                                    <td>Bob Manager</td>
+                                </tr>
 
-                            <select class="form-select">
-                                <option>
-                                    David Associate
-                                </option>
-                            </select>
-                        </div>
+                                <tr>
+                                    <td>Associate</td>
+                                    <td>April Associate</td>
+                                </tr>
 
-                        <div class="mb-3">
-                            <label>Associate Slot 3</label>
+                                <tr>
+                                    <td>Associate</td>
+                                    <td>David Associate</td>
+                                </tr>
 
-                            <select class="form-select">
-                                <option>
-                                    -- Select Employee --
-                                </option>
+                            </tbody>
 
-                                <option>
-                                    Emma Associate
-                                </option>
-
-                                <option>
-                                    Frank Associate
-                                </option>
-
-                                <option>
-                                    Grace Associate
-                                </option>
-                            </select>
-                        </div>
+                        </table>
 
                     </div>
 
                 </div>
 
+                <!-- Available Employees -->
+
+                <div class="card mb-3">
+
+                    <div class="card-header">
+                        Available Employees
+                    </div>
+
+                    <div class="card-body">
+
+                        <select class="form-select">
+
+                            <option>
+                                -- Select Employee --
+                            </option>
+
+                            <option>
+                                Emma Associate
+                            </option>
+
+                            <option>
+                                Frank Associate
+                            </option>
+
+                            <option>
+                                Grace Associate
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
 
                 <!-- Labor Analysis -->
 
                 <div class="card">
 
                     <div class="card-header">
-                        Shift Labor Analysis
+                        Labor Analysis
                     </div>
 
                     <div class="card-body">
@@ -231,25 +381,19 @@
                         <div class="row text-center">
 
                             <div class="col">
-                                <h6>Labor Hours</h6>
+                                <h6>Hours</h6>
                                 <div>16</div>
                             </div>
 
                             <div class="col">
-                                <h6>Labor Cost</h6>
+                                <h6>Cost</h6>
                                 <div>$248</div>
                             </div>
 
                             <div class="col">
-                                <h6>Shift Budget</h6>
-                                <div>$300</div>
-                            </div>
-
-                            <div class="col">
                                 <h6>Variance</h6>
-
                                 <div class="text-success">
-                                    +$52 ✅
+                                    +$52
                                 </div>
                             </div>
 
@@ -265,14 +409,12 @@
 
                 <button
                     class="btn btn-secondary"
-                    data-bs-dismiss="modal"
-                >
+                    data-bs-dismiss="modal">
                     Cancel
                 </button>
 
                 <button
-                    class="btn btn-primary"
-                >
+                    class="btn btn-primary">
                     Save Changes
                 </button>
 
@@ -283,5 +425,68 @@
     </div>
 
 </div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const calendarEl =
+        document.getElementById("calendar");
+
+    const calendar =
+        new FullCalendar.Calendar(calendarEl, {
+
+            initialView: "timeGridWeek",
+
+            initialDate: "{{ week_start if week_start else today }}",
+
+            height: "auto",
+
+            headerToolbar: {
+                left: "prev,next today",
+                center: "title",
+                right: "timeGridWeek,dayGridMonth"
+            },
+
+            events: [
+                {
+                    title: "Morning Shift (3/4)",
+                    start: "2026-11-16T08:00:00",
+                    end: "2026-11-16T12:00:00"
+                },
+                {
+                    title: "Afternoon Shift (4/4)",
+                    start: "2026-11-16T12:00:00",
+                    end: "2026-11-16T16:00:00"
+                }
+            ],
+
+            eventClick: function() {
+
+                const modal =
+                    new bootstrap.Modal(
+                        document.getElementById("shiftModal")
+                    );
+
+                modal.show();
+            }
+
+        });
+
+    calendar.render();
+});
+
+function loadWeek() {
+    const weekStart = document.getElementById("weekStart").value;
+
+    if (!weekStart) {
+        return;
+    }
+
+    window.location = `/schedule?week_start=${weekStart}`;
+}
+</script>
 
 {% endblock %}
