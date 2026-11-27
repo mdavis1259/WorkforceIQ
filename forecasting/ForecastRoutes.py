@@ -8,7 +8,7 @@ from database.connection import get_db_connection
 from forecasting.ForecastRepository import ForecastRepository
 from forecasting.ForecastService import ForecastService
 from dataclasses import asdict
-from errors import InsufficientHistoryError
+from shared.exceptions import InsufficientHistoryError
 
 
 forecasting_bp = Blueprint(

@@ -1,105 +1,549 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>WorkforceIQ</title>
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <nav class="navbar">
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <span class="navbar-text">Schedule</span>
-        <a href="{{ url_for('availability.availability') if current_user.system_role_id == 1 else url_for('availability.avail_select') }}">Availability</a>
-        <a href="{{ url_for('employee.employees') }}">Employees</a>
-        <span class="navbar-text" {% if current_user.system_role_id != 3 %}hidden=true{% endif %}>Users</span>
-        <a href="{{ url_for('forecast.forecast') }}" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Forecast</a>
-        <span class="navbar-text" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Reports</span>
-        <a href="{{ url_for('assistant.ai_assistant') }}">AI Assistant</a>
-        {% if current_user.is_authenticated %}
-        <span class="navbar-username">{{ current_user.username }}</span>
-        <a href="{{ url_for('auth.logout') }}" class="navbar-logout">Logout</a>
-        {% endif %}
-    </nav>
-    <main class="container">
-        <h1>Availability</h1>
-    <div class="calendar-wrapper dashboard">
-        <div id="calendar" class="availability_calendar"></div>
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+    :root {
+        --primary: #1f4e79;
+    }
+
+    .availability-new-request {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        z-index: 10;
+        padding: 8px 14px;
+        border: 0;
+        border-radius: 6px;
+        background: var(--primary);
+        color: white;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .availability-dialog {
+        width: min(300px, calc(100vw - 32px));
+        padding: 20px;
+        border: none;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .availability-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.45);
+    }
+
+    .availability-dialog h2 {
+        margin: 0 0 16px;
+        font-size: 1.25rem;
+    }
+
+    .availability-field {
+        min-width: 0;
+        margin: 0 0 10px;
+        border: 0;
+    }
+
+    .availability-field legend {
+        margin-bottom: 4px;
+    }
+
+    .availability-event-details p {
+        margin: 0 0 10px;
+    }
+
+    .availability-choice-group {
+        display: flex;
+        gap: 10px;
+    }
+
+    .availability-choice {
+        padding: 8px 14px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: white;
+        color: #333;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .availability-choice[aria-pressed="true"] {
+        border-color: transparent;
+        color: white;
+    }
+
+    #availableButton[aria-pressed="true"] {
+        background: green;
+    }
+
+    #busyButton[aria-pressed="true"] {
+        background: red;
+    }
+
+    .availability-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .availability-modal-actions button {
+        padding: 8px 14px;
+        border: 0;
+        border-radius: 6px;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    #closeModalBtn {
+        background: var(--primary);
+        color: white;
+    }
+
+    .calendar-wrapper {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+    }
+
+    .calendar-wrapper > #calendar {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .calendar-wrapper .fc {
+        width: 100%;
+    }
+
+    .calendar-wrapper .fc-toolbar.fc-header-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    @media (max-width: 768px) {
+        .calendar-wrapper {
+            padding: 15px;
+        }
+
+        .calendar-wrapper .fc-toolbar-title {
+            font-size: 1.1em;
+        }
+
+        .calendar-wrapper .fc-button {
+            padding: 0.4em;
+            font-size: 0.85em;
+        }
+    }
+
+    .time-off-locked {
+        background-color: red !important;
+        border-color: red !important;
+        cursor: not-allowed;
+    }
+
+    .time-off-locked .fc-daygrid-event-dot {
+        border-color: red !important;
+    }
+
+    .fc-bg-event .fc-event-title {
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+
+    .bg-continuation .fc-event-title {
+        display: none;
+    }
+
+    .time-off-review-background {
+        pointer-events: auto;
+        cursor: pointer;
+    }
+
+    .time-off-review-background:focus-visible {
+        outline: 2px solid var(--primary);
+        outline-offset: -2px;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d6dce5;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        font-size: 15px;
+    }
+
+    .form-group input:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.15);
+    }
+
+    .error-message {
+        background: #fdecea;
+        color: #b00020;
+        border: 1px solid #f5c2c7;
+        padding: 10px;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+</style>
+
+<h1>{{ employee.first_name }} {{ employee.last_name }} - Availability</h1>
+
+{% if employee.employee_id == current_user.employee_id %}
+<button id="newTimeOffButton" class="availability-new-request" type="button">New <br> Time-Off <br> Request</button>
+{% endif %}
+
+<section class="calendar-wrapper" aria-label="Availability calendar">
+    <div id="calendar"></div>
+</section>
+
+<dialog id="eventModal" class="availability-dialog">
+    <h2>Edit availability</h2>
+    <form method="dialog">
+        <div class="availability-event-details">
+            <p><strong>Shift:</strong> <span id="eventTitle"></span></p>
+            <p><strong>Time:</strong> <span id="eventTime"></span></p>
+        </div>
+        <fieldset class="availability-field">
+            <legend>Availability</legend>
+            <div class="availability-choice-group">
+                <button id="availableButton" class="availability-choice" type="button" aria-pressed="false">
+                    Available
+                </button>
+                <button id="busyButton" class="availability-choice" type="button" aria-pressed="false">
+                    Busy
+                </button>
+            </div>
+        </fieldset>
+        <div class="availability-modal-actions">
+            <button id="closeModalBtn" type="submit">Close</button>
+        </div>
+    </form>
+</dialog>
+
+{% if employee.employee_id == current_user.employee_id %}
+<dialog id="timeOffModal" class="availability-dialog" aria-labelledby="timeOffTitle">
+    <h2 id="timeOffTitle">New Time-Off Request</h2>
+    <form id="timeOffForm" method="dialog">
+        <div class="form-group">
+            <label for="timeOffStart">Start Date</label>
+            <input id="timeOffStart" type="date" max="9999-12-30">
+        </div>
+        <div class="form-group">
+            <label for="timeOffEnd">End Date</label>
+            <input id="timeOffEnd" type="date" max="9999-12-30">
+        </div>
+        <p id="timeOffError" class="error-message" role="alert" hidden></p>
+        <div class="availability-modal-actions">
+            <button id="timeOffAction" type="submit">Close</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
+{% if can_review %}
+<dialog id="reviewTimeOffModal" class="availability-dialog" aria-labelledby="reviewTimeOffTitle">
+    <h2 id="reviewTimeOffTitle">Review time-off request</h2>
+    <div class="availability-event-details">
+        <p><strong>Employee Name:</strong> <span id="reviewEmployee">{{ employee.first_name }} {{ employee.last_name }}</span></p>
+        <p><strong>Start Date:</strong> <span id="reviewStart"></span></p>
+        <p><strong>End Date:</strong> <span id="reviewEnd"></span></p>
+        <p>Approve?</p>
     </div>
-    <dialog id="eventModal" style="padding: 20px; border-radius: 8px; border: 1px solid #ccc; width: 300px;">
-        <h3 id="modalHeading" style="margin-top: 0;">Edit availability</h3>
-        <form method="dialog">
-            <div class="availability-event-details">
-                <p><strong>Title:</strong> <span id="eventTitle"></span></p>
-                <p><strong>Time:</strong> <span id="eventTime"></span></p>
-            </div>
-            <div class="availability-field">
-                <label>Availability:</label>
-                <div class="availability-choice-group" role="group" aria-label="Availability">
-                    <button id="availableButton" class="availability-choice" type="button" aria-pressed="false">
-                        Available
-                    </button>
-                    <button id="busyButton" class="availability-choice" type="button" aria-pressed="false">
-                        Busy
-                    </button>
-                </div>
-            </div>
-            <div class="availability-modal-actions">
-                <button id="closeModalBtn" type="submit">Close</button>
-            </div>
-        </form>
-    </dialog>
-    <script>
-        let calendarEl = document.getElementById('calendar');
-        let modal = document.getElementById('eventModal');
-        let eventTitle = document.getElementById('eventTitle');
-        let eventTime = document.getElementById('eventTime');
-        let availableButton = document.getElementById('availableButton');
-        let busyButton = document.getElementById('busyButton');
-        let closeModalButton = document.getElementById('closeModalBtn');
-        let selectedEvent = null;
-        let originalAvailability = null;
-        let selectedAvailability = 2;
+    <p id="reviewError" class="error-message" role="alert" hidden></p>
+    <p id="reviewStatus" hidden></p>
+    <div class="availability-modal-actions">
+        <button id="reviewApprove" type="button">Approve</button>
+        <button id="reviewDeny" type="button">Deny</button>
+        <button id="reviewClose" type="button">Close</button>
+    </div>
+</dialog>
+{% endif %}
 
-        function setAvailability(availability) {
-            selectedAvailability = availability;
-            availableButton.setAttribute('aria-pressed', availability === 1);
-            busyButton.setAttribute('aria-pressed', availability === 0);
-            availableButton.classList.toggle('is-selected', availability === 1);
-            busyButton.classList.toggle('is-selected', availability === 0);
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+<script>
+    const csrfToken = "{{ csrf_token() }}";
+    const calendarElement = document.getElementById('calendar');
+    const modal = document.getElementById('eventModal');
+    const eventTitle = document.getElementById('eventTitle');
+    const eventTime = document.getElementById('eventTime');
+    const availableButton = document.getElementById('availableButton');
+    const busyButton = document.getElementById('busyButton');
+    const modalActionButton = document.getElementById('closeModalBtn');
+    let selectedEvent = null;
+    let originalAvailability = null;
+    let selectedAvailability = 2;
+
+    const approvedDays = new Set({{ approved_days|tojson }});
+
+    {% if can_review %}
+    const reviewModal = document.getElementById('reviewTimeOffModal');
+    const reviewError = document.getElementById('reviewError');
+    const reviewStatus = document.getElementById('reviewStatus');
+    const reviewApprove = document.getElementById('reviewApprove');
+    const reviewDeny = document.getElementById('reviewDeny');
+    const reviewClose = document.getElementById('reviewClose');
+    const timeOffRequestsUrl = {{ url_for("availability.get_time_off_requests")|tojson }};
+    const reviewUrl = {{ url_for("availability.review_time_off_request", request_id=0)|tojson }};
+    let reviewRequestId = null;
+    let reviewBusy = false;
+    let selectedReviewStatus = null;
+
+    async function openTimeOffReview(requestId) {
+        if (reviewBusy || reviewModal.open) return;
+        reviewBusy = true;
+        try {
+            const response = await fetch(timeOffRequestsUrl);
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error?.message || 'Unable to load time-off request.');
+            }
+            const request = result.requests.find(item => String(item.request_id) === String(requestId));
+            if (!request) {
+                throw new Error('Time-off request not found.');
+            }
+            reviewRequestId = request.request_id;
+            document.getElementById('reviewStart').textContent = request.start_date;
+            document.getElementById('reviewEnd').textContent = request.end_date;
+            reviewError.hidden = true;
+            reviewModal.showModal();
+        } catch (error) {
+            console.error('Unable to load time-off request:', error);
+            alert(error.message || 'Unable to load time-off request.');
+        } finally {
+            reviewBusy = false;
         }
+    }
 
-        function updateModalButton() {
-            closeModalButton.textContent = selectedAvailability !== originalAvailability ? 'Save' : 'Close';
+    reviewClose.addEventListener('click', async () => {
+        if (selectedReviewStatus) {
+            if (reviewBusy) return;
+            reviewBusy = true;
+            [reviewApprove, reviewDeny, reviewClose].forEach(item => item.disabled = true);
+            try {
+                const response = await fetch(reviewUrl.replace(/0$/, String(reviewRequestId)), {
+                    method: 'PATCH',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfToken
+                    },
+                    body: JSON.stringify({ status: selectedReviewStatus })
+                });
+                console.log('DEBUG [PATCH]: Response status:', response.status);
+                console.log('DEBUG [PATCH]: Response ok:', response.ok);
+                const result = await response.json();
+                console.log('DEBUG [PATCH]: Response JSON:', result);
+                console.log('DEBUG [PATCH]: result.background_events:', result.background_events);
+                console.log('DEBUG [PATCH]: result.approved_days:', result.approved_days);
+                if (!response.ok || result.status !== 'success') {
+                    throw new Error(result.message || 'Unable to update time-off request.');
+                }
+                calendar.getEvents().filter(event =>
+                    (event.display === 'background' && event.id === String(reviewRequestId)) ||
+                    event.extendedProps.reviewRequestId === reviewRequestId
+                ).forEach(event => event.remove());
+                console.log('DEBUG [PATCH]: Adding background events:', result.background_events);
+                result.background_events.forEach(event => calendar.addEvent(event));
+                approvedDays.clear();
+                result.approved_days.forEach(day => approvedDays.add(day));
+                calendar.setOption('eventClassNames', info => calendarEventClassNames(info));
+                reviewModal.close();
+            } catch (error) {
+                console.error('Unable to update time-off request:', error);
+                console.error('Error stack:', error.stack);
+                reviewError.textContent = error.message || 'Unable to update time-off request.';
+                reviewError.hidden = false;
+            } finally {
+                reviewBusy = false;
+                [reviewApprove, reviewDeny, reviewClose].forEach(item => item.disabled = false);
+            }
+        } else {
+            reviewModal.close();
         }
+    });
 
-        [availableButton, busyButton].forEach(button => {
-            button.addEventListener('click', function() {
-                setAvailability(button === availableButton ? 1 : 0);
-                updateModalButton();
-            });
+    reviewModal.addEventListener('cancel', event => {
+        if (reviewBusy) event.preventDefault();
+    });
+
+    [reviewApprove, reviewDeny].forEach(button => {
+        button.addEventListener('click', () => {
+            selectedReviewStatus = button === reviewApprove ? 'Approved' : 'Denied';
+            reviewStatus.textContent = `You selected: ${selectedReviewStatus}`;
+            reviewStatus.hidden = false;
+            reviewClose.textContent = 'Save';
         });
-        modal.addEventListener('close', function() {
-            const event = selectedEvent;
-            selectedEvent = null;
-            if (!event || selectedAvailability === originalAvailability) {
-                return;
+    });
+    {% endif %}
+
+    {% if employee.employee_id == current_user.employee_id %}
+    const timeOffModal = document.getElementById('timeOffModal');
+    const timeOffForm = document.getElementById('timeOffForm');
+    const timeOffStart = document.getElementById('timeOffStart');
+    const timeOffEnd = document.getElementById('timeOffEnd');
+    const timeOffAction = document.getElementById('timeOffAction');
+    const timeOffError = document.getElementById('timeOffError');
+    const timeOffRanges = {{ time_off_ranges|tojson }};
+    let savingTimeOff = false;
+
+    function overlapsTimeOff(start, end) {
+        return timeOffRanges.some(range => start <= range.end && end >= range.start);
+    }
+
+    document.getElementById('newTimeOffButton').addEventListener('click', () => {
+        timeOffForm.reset();
+        const now = new Date();
+        const today = [
+            now.getFullYear(),
+            String(now.getMonth() + 1).padStart(2, '0'),
+            String(now.getDate()).padStart(2, '0')
+        ].join('-');
+        timeOffStart.min = today;
+        timeOffEnd.min = today;
+        timeOffError.hidden = true;
+        timeOffAction.textContent = 'Close';
+        timeOffModal.showModal();
+    });
+
+    [timeOffStart, timeOffEnd].forEach(input => {
+        input.addEventListener('input', () => {
+            if (input.value && overlapsTimeOff(input.value, input.value)) {
+                input.value = '';
+                timeOffError.textContent = 'This date overlaps an existing time-off request.';
+                timeOffError.hidden = false;
+            } else if (timeOffStart.value && timeOffEnd.value &&
+                       overlapsTimeOff(timeOffStart.value, timeOffEnd.value)) {
+                timeOffError.textContent = 'These dates overlap an existing time-off request.';
+                timeOffError.hidden = false;
+            } else {
+                timeOffError.hidden = true;
             }
+            timeOffAction.textContent = timeOffStart.value && timeOffEnd.value ? 'Save' : 'Close';
+        });
+    });
 
-            const previous = {
-                color: event.backgroundColor,
-                availability: event.extendedProps.availability
-            };
-            const availability = selectedAvailability;
+    timeOffModal.addEventListener('cancel', event => {
+        if (savingTimeOff) event.preventDefault();
+    });
 
-            if (availability !== 2) {
-                event.setProp('color', availability === 1 ? 'green' : 'red');
-            }
-            event.setExtendedProp('availability', availability);
+    timeOffForm.addEventListener('submit', async event => {
+        if (!timeOffStart.value || !timeOffEnd.value) return;
+        event.preventDefault();
+        if (savingTimeOff) return;
+        if (timeOffEnd.value < timeOffStart.value) {
+            timeOffError.textContent = 'End Date must be on or after Start Date.';
+            timeOffError.hidden = false;
+            return;
+        }
+        if (overlapsTimeOff(timeOffStart.value, timeOffEnd.value)) {
+            timeOffError.textContent = 'These dates overlap an existing time-off request.';
+            timeOffError.hidden = false;
+            return;
+        }
 
-            fetch('/availability', {
+        const startDate = timeOffStart.value;
+        const endDate = timeOffEnd.value;
+        savingTimeOff = true;
+        timeOffAction.disabled = true;
+        timeOffStart.disabled = true;
+        timeOffEnd.disabled = true;
+        try {
+            const response = await fetch('{{ url_for("availability.create_time_off_request") }}', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: JSON.stringify({ start_date: startDate, end_date: endDate })
+            });
+            console.log('DEBUG: Response status:', response.status);
+            console.log('DEBUG: Response ok:', response.ok);
+            const result = await response.json();
+            console.log('DEBUG: Response JSON:', result);
+            console.log('DEBUG: result.status:', result.status);
+            console.log('DEBUG: result.background_events:', result.background_events);
+            if (!response.ok || result.status !== 'success') {
+                throw new Error(result.message || 'Failed to create time-off request.');
+            }
+            console.log('DEBUG: About to add events to calendar');
+            console.log('DEBUG: background_events array length:', result.background_events.length);
+            result.background_events.forEach((item, index) => {
+                console.log(`DEBUG: Adding event ${index}:`, item);
+                calendar.addEvent(item);
+            });
+            timeOffRanges.push({ start: startDate, end: endDate });
+            timeOffModal.close();
+        } catch (error) {
+            console.error('Unable to create time-off request:', error);
+            console.error('Error stack:', error.stack);
+            timeOffError.textContent = error.message || 'Failed to create time-off request.';
+            timeOffError.hidden = false;
+        } finally {
+            savingTimeOff = false;
+            timeOffAction.disabled = false;
+            timeOffStart.disabled = false;
+            timeOffEnd.disabled = false;
+        }
+    });
+    {% endif %}
+
+    function isApprovedDay(date) {
+        const localDate = [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, '0'),
+            String(date.getDate()).padStart(2, '0')
+        ].join('-');
+        return approvedDays.has(localDate);
+    }
+
+    function setAvailability(availability) {
+        selectedAvailability = availability;
+        const available = availability === 1;
+        const busy = availability === 0;
+        availableButton.setAttribute('aria-pressed', available);
+        busyButton.setAttribute('aria-pressed', busy);
+        modalActionButton.textContent = availability === originalAvailability ? 'Close' : 'Save';
+    }
+
+    [availableButton, busyButton].forEach(button => {
+        button.addEventListener('click', () => {
+            setAvailability(button === availableButton ? 1 : 0);
+        });
+    });
+
+    modal.addEventListener('close', async () => {
+        const event = selectedEvent;
+        selectedEvent = null;
+        if (!event || selectedAvailability === originalAvailability) return;
+
+        const previous = {
+            color: event.backgroundColor,
+            availability: event.extendedProps.availability
+        };
+        event.setProp('color', selectedAvailability === 1 ? 'green' : 'red');
+        event.setExtendedProp('availability', selectedAvailability);
+
+        try {
+            const response = await fetch('{{ url_for("availability.availability_detail", employee_id=employee.employee_id) }}', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': csrfToken
                 },
                 body: JSON.stringify({
                     id: event.id,
@@ -110,74 +554,84 @@
                     end_timezone_offset: event.end.getTimezoneOffset(),
                     availability: selectedAvailability
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status !== 'success') {
-                    throw new Error('Failed to update event.');
-                }
-                event.setProp('id', String(data.id));
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                event.setProp('color', previous.color);
-                event.setExtendedProp('availability', previous.availability);
-                alert('Failed to save event changes. The event has been reverted.');
             });
-        });
+            const result = await response.json();
+            console.log('Response status:', response.status);
+            console.log('Response ok:', response.ok);
+            console.log('Response result:', result);
+            if (!response.ok || result.status !== 'success') {
+                throw new Error(result.message || result.error?.message || 'Failed to update availability.');
+            }
+            event.setProp('id', String(result.id));
+        } catch (error) {
+            console.error('Unable to save availability:', error);
+            console.error('Error details:', error.message);
+            event.setProp('color', previous.color);
+            event.setExtendedProp('availability', previous.availability);
+            alert(`Failed to save event changes. The event has been reverted.\n\nError: ${error.message}`);
+        }
+    });
 
-        let calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'timeGridWeek',
-            selectable: true,
-            editable: false,
-            height: 'auto',
-            contentHeight: 'auto',
-            slotDuration: '00:15:00',
-            slotMinTime: '00:00:00',
-            slotMaxTime: '24:00:00',
-            allDaySlot: true,
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek'
-            },
-            events: [
-                {% for event in availability %}
-                {
-                    id: {{ event.id|tojson }},
-                    title: '{{ event.title }}',
-                    startTime: '{{ event.startTime }}',
-                    endTime: '{{ event.endTime }}',
-                    daysOfWeek: {{ event.daysOfWeek|tojson }},
-                    availability: {{ event.availability }},
-                    color: '{{ event.color }}'
-                },
-                {% endfor %}
-            ],
-            eventClick: function(info) {
-                info.jsEvent.preventDefault();
-                selectedEvent = info.event;
-                eventTitle.textContent = info.event.title;
-                const timeOptions = { hour: 'numeric', minute: '2-digit' };
-                const startTime = info.event.start.toLocaleTimeString([], timeOptions);
-                const endTime = info.event.end
-                    ? info.event.end.toLocaleTimeString([], timeOptions)
-                    : '';
-                eventTime.textContent = endTime ? `${startTime} - ${endTime}` : startTime;
-                setAvailability(Number(info.event.extendedProps.availability));
-                originalAvailability = selectedAvailability;
-                updateModalButton();
-                modal.showModal();
-            },
-        });
-        calendar.render();
+    function calendarEventClassNames({ event, isStart }) {
+        if (event.display === 'background') {
+            return isStart ? [] : ['bg-continuation'];
+        }
+        return event.start && isApprovedDay(event.start) ? ['time-off-locked'] : [];
+    }
 
-        window.addEventListener('resize', function () {
-            calendar.updateSize();
-        });
-    </script>
-    </main>
-    <footer class="footer">
-         WorkforceIQ Proof of Concept
-    </footer>
-</body>
+    const calendar = new FullCalendar.Calendar(calendarElement, {
+        initialView: 'timeGridWeek',
+        height: 'auto',
+        slotDuration: '00:30:00',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek'
+        },
+        eventSources: [
+            { events: {{ availability|tojson }} },
+            { events: {{ background|tojson }} }
+        ],
+        eventDidMount: info => {
+            {% if can_review %}
+            if (info.event.display === 'background' && info.event.extendedProps.reviewRequestId) {
+                info.el.classList.add('time-off-review-background');
+                info.el.setAttribute('tabindex', '0');
+                info.el.setAttribute('role', 'button');
+                info.el.setAttribute('aria-label', `Review pending time-off request ${info.event.extendedProps.reviewRequestId}`);
+                info.el.addEventListener('click', () => openTimeOffReview(info.event.extendedProps.reviewRequestId));
+                info.el.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openTimeOffReview(info.event.extendedProps.reviewRequestId);
+                    }
+                });
+            }
+            {% endif %}
+        },
+        eventClassNames: calendarEventClassNames,
+        eventClick: info => {
+            info.jsEvent.preventDefault();
+            {% if can_review %}
+            if (info.event.extendedProps.reviewRequestId) {
+                openTimeOffReview(info.event.extendedProps.reviewRequestId);
+                return;
+            }
+            {% endif %}
+            if (info.event.display === 'background') return;
+            if (info.event.start && isApprovedDay(info.event.start)) return;
+
+            selectedEvent = info.event;
+            eventTitle.textContent = info.event.title;
+            const options = { hour: 'numeric', minute: '2-digit' };
+            const start = info.event.start.toLocaleTimeString([], options);
+            const end = info.event.end?.toLocaleTimeString([], options);
+            eventTime.textContent = end ? `${start} - ${end}` : start;
+            originalAvailability = Number(info.event.extendedProps.availability);
+            setAvailability(originalAvailability);
+            modal.showModal();
+        }
+    });
+    calendar.render();
+</script>
+{% endblock %}

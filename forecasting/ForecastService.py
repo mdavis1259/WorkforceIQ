@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 from datetime import date, datetime, timedelta
 from forecasting.Forecast import Forecast
-from errors import InsufficientHistoryError
+from shared.exceptions import InsufficientHistoryError
 
 
 class ForecastService:

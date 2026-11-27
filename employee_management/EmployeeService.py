@@ -6,7 +6,7 @@ Roles, Qualifications or EmployeeQualifications tables directly.
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
-from errors import NotFoundError, ValidationError
+from shared.exceptions import NotFoundError, ValidationError
 
 MAX_NAME_LENGTH = 50
 MAX_HOURLY_RATE = Decimal("500")
@@ -73,6 +73,10 @@ class EmployeeService:
     def list_qualifications(self):
         return self.repository.list_qualifications()
 
+    def get_system_role(self, employee_id):
+        employee = self.get_employee(employee_id)
+        return employee.system_role_id if employee else None
+
     # ----- writes -------------------------------------------------
     def create_employee(self, data):
         """Create an employee. data may include qualification_ids."""
@@ -138,8 +142,9 @@ class EmployeeService:
             raise
         return self.get_employee(employee_id)
 
-    def get_system_role(self, role_id):
-        return self.repository.get_system_role_id(role_id)
+    def get_system_role(self, employee_id):
+        employee = self.get_employee(employee_id)
+        return self.repository.get_system_role_id(employee.role_id) if employee else None
 
     # ----- helpers ------------------------------------------------
     @staticmethod

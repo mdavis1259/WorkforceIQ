@@ -2,22 +2,199 @@
 
 {% block content %}
 
-<h1>Who's Availability Would You Like to View?</h1>
-<div class="availability-selection">
-    <form action="{{ url_for('availability.avail_select') }}" method="POST">
-        <button type="submit" name="employee_id" value="{{ current_user.employee_id }}" class="btn">
-            My Availability
-        </button>
-    </form>
-    
-    <form action="{{ url_for('availability.avail_select') }}" method="POST">
-        <label for="employee_id">View an employee:</label>
-        <select id="employee_id" name="employee_id" required>
-            {% for employee in employees %}
-            <option value="{{ employee.employee_id }}">{{ employee.first_name }} {{ employee.last_name }} (ID: {{ employee.employee_id }})</option>
-            {% endfor %}
-        </select>
-        <button type="submit" class="btn">View Selected Employee</button>
-    </form>
+<style>
+    .availability-container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 0 20px 40px 20px;
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .page-header h1 {
+        font-size: 28px;
+        color: #1f4e79;
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+
+    .page-header p {
+        color: #666;
+        font-size: 15px;
+    }
+
+    .availability-selection {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .card {
+        background: white;
+        border: 1px solid #e0e6f2;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transition: all 0.2s ease;
+    }
+
+    .card:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        border-color: #1f4e79;
+    }
+
+    .card-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f4e79;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+    }
+
+    .card-description {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 16px;
+        line-height: 1.4;
+    }
+
+    .card-icon {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-right: 10px;
+        text-align: center;
+        line-height: 24px;
+        font-size: 18px;
+    }
+
+    .btn {
+        width: 100%;
+        padding: 12px 16px;
+        background: #1f4e79;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 15px;
+        transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+        background: #163955;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn:active {
+        transform: translateY(0);
+    }
+
+    .form-group {
+        margin-bottom: 0;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 12px;
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .form-group select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d6dce5;
+        border-radius: 8px;
+        font-size: 15px;
+        background-color: white;
+        transition: all 0.2s ease;
+        margin-bottom: 16px;
+    }
+
+    .form-group select:focus {
+        outline: none;
+        border-color: #1f4e79;
+        box-shadow: 0 0 0 3px rgba(31, 78, 121, 0.15);
+    }
+
+    form {
+        margin: 0;
+    }
+</style>
+
+<div class="availability-container">
+    <div class="page-header">
+        <h1>Availability Management</h1>
+        <p>Manage Time-Off Requests and Weekly Availability for employees</p>
+    </div>
+
+    <div class="availability-selection">
+        <!-- My Availability Card -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">👤</span>
+                My Schedule
+            </div>
+            <div class="card-description">
+                Manage your own weekly availability and time-off requests
+            </div>
+            <form action="{{ url_for('availability.availability_detail', employee_id=current_user.employee_id) }}" method="GET">
+                <button type="submit" class="btn">View My Availability</button>
+            </form>
+        </div>
+
+        <!-- Select Specific Employee Card -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">🔍</span>
+                View an Employee
+            </div>
+            <div class="card-description">
+                Manage an employee's availability and time-off requests
+            </div>
+            <form action="{{ url_for('availability.availability_detail', employee_id=1) }}" method="GET" id="employee-select-form">
+                <div class="form-group">
+                    <label for="employee_id">Select an employee:</label>
+                    <select id="employee_id" required onchange="updateFormAction()">
+                        {% for employee in employees %}
+                        <option value="{{ employee.employee_id }}">{{ employee.first_name }} {{ employee.last_name }} (ID: {{ employee.employee_id }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn">View Selected Employee</button>
+            </form>
+        </div>
+
+        <!-- View All Employees Card -->
+        <div class="card">
+            <div class="card-title">
+                <span class="card-icon">👥</span>
+                All Employees
+            </div>
+            <div class="card-description">
+                View time-off for all employees you manage
+            </div>
+            <button type="button" class="btn" onclick="alert('Coming soon!')">View All Employees</button>
+        </div>
+    </div>
 </div>
+
+<script>
+function updateFormAction() {
+    const form = document.getElementById('employee-select-form');
+    const employeeId = document.getElementById('employee_id').value;
+    const baseRoute = "{{ url_for('availability.availability_detail', employee_id=1) }}";
+    form.action = baseRoute.replace('/1', '/' + employeeId);
+}
+
+// Initialize form action on page load with the pre-selected employee
+document.addEventListener('DOMContentLoaded', updateFormAction);
+</script>
 {% endblock %}

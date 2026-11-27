@@ -9,7 +9,7 @@
      <nav class="navbar">
         <a href="{{ url_for('dashboard') }}">Dashboard</a>
         <a href="{{ url_for('scheduling.schedule') }}" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Schedule</a>
-        <a href="{{ url_for('availability.availability') if current_user.system_role_id == 1 else url_for('availability.avail_select') }}">Availability</a>
+        <a href="{{ url_for('availability.availability_detail', employee_id=current_user.employee_id) if current_user.system_role_id == 1 else url_for('availability.availability_selector') }}">Availability</a>
         <a href="{{ url_for('employee.employees') }}">Employees</a>
         <a href="{{ url_for('user.users') }}" {% if current_user.system_role_id != 3 %}hidden=true{% endif %}>Users</a>
         <a href="{{ url_for('forecast.forecast') }}" {% if current_user.system_role_id == 1 %}hidden=true{% endif %}>Forecast</a>
