@@ -419,7 +419,15 @@ class WorkforceIQTestCase(unittest.TestCase):
         self.login_as_test_user()
         self.set_test_user_role(2)
 
-        response = self.client.get("/forecast")
+        self.client.get("/forecast")
+
+        with self.client.session_transaction() as sess:
+            token = sess["csrf_token"]
+
+        response = self.client.post("/forecast",
+            data={"week_start": "2026-11-16", "csrf_token": token},
+            follow_redirects=True
+        )
 
         self.assertEqual(response.status_code, 200)
 

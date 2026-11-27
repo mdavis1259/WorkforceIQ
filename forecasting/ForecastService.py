@@ -83,14 +83,6 @@ class ForecastService:
 
             required_labor_hours = self.calculate_required_labor_hours(prediction, sales_per_labor_hour_goal)
 
-            print(
-                f"Saving forecast: "
-                f"{forecast_date} "
-                f"sales={round(prediction, 2)} "
-                f"hours={required_labor_hours} "
-                f"budget={labor_budget}"
-            )
-
             forecast_id = self.repository.save_forecast(
                 forecast_date,
                 round(prediction, 2),
