@@ -12,6 +12,7 @@ class SchedulingService:
     ):
         self.scheduling_repository = scheduling_repository
         self.employee_service = employee_service
+        self.availability_service = availability_service
         self.forecasting_service = forecasting_service
         self.availability_service = availability_service
 

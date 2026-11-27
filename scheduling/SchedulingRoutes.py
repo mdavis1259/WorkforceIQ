@@ -12,6 +12,8 @@ from employee_management.EmployeeService import EmployeeService
 from employee_management.EmployeeRepository import EmployeeRepository
 from scheduling.SchedulingRepository import SchedulingRepository
 from scheduling.SchedulingService import SchedulingService
+from availability.AvaliabilityRepository import AvaliabilityRepository
+from availability.AvailabilityService import AvailabilityService
 from forecasting.ForecastRepository import ForecastRepository
 from forecasting.ForecastService import ForecastService
 from availability.AvailabilityRepository import AvailabilityRepository
@@ -32,9 +34,12 @@ def _build_scheduling_service():
     # Instantiate repositories for service instantiation
     scheduling_repository = SchedulingRepository(conn)
     employee_repository = EmployeeRepository(conn)
+    availability_repository = AvailabliityRepostiory(conn)
     forecasting_repository = ForecastRepository(conn)
 
+
     employee_service = EmployeeService(employee_repository)
+    availability_service = AvailabilityService(availability_repository)
     forecasting_service = ForecastService(forecasting_repository)
     availability_repository = AvailabilityRepository(conn)
     availability_service = AvailabilityService(availability_repository, employee_service)
