@@ -286,88 +286,6 @@ class SchedulingTests(unittest.TestCase):
         return rows
 
     # ==================================
-    # SHIFT CRUD
-    # ==================================
-
-    def test_create_shift_persists_record(self):
-
-        service, conn = self.get_service()
-
-        try:
-
-            service.create_shift(
-                "Evening Shift",
-                "16:00",
-                "22:00"
-            )
-
-        finally:
-
-            conn.close()
-
-        self.assertEqual(
-            self.read_rows(
-                """
-                SELECT shift_name
-                FROM Shifts
-                WHERE shift_name = ?
-                """,
-                ("Evening Shift",)
-            ),
-            [("Evening Shift",)]
-        )
-
-    def test_update_shift_updates_record(self):
-
-        service, conn = self.get_service()
-
-        try:
-
-            service.update_shift(
-                1,
-                "Updated Shift",
-                "09:00",
-                "17:00"
-            )
-
-        finally:
-
-            conn.close()
-
-        self.assertEqual(
-            self.read_rows(
-                """
-                SELECT shift_name
-                FROM Shifts
-                WHERE shift_id = 1
-                """
-            ),
-            [("Updated Shift",)]
-        )
-
-    def test_delete_shift_removes_record(self):
-
-        service, conn = self.get_service()
-
-        try:
-
-            service.delete_shift(1)
-
-        finally:
-
-            conn.close()
-
-        self.assertEqual(
-            self.read_rows(
-                """
-                SELECT *
-                FROM Shifts
-                """
-            ),
-            []
-        )
-
-    # ==================================
     # STAFFING REQUIREMENTS
     # ==================================
 
@@ -538,32 +456,6 @@ class SchedulingTests(unittest.TestCase):
 
             conn.close()
 
-    def test_workday_configuration_persists(self):
-
-        service, conn = self.get_service()
-
-        try:
-
-            service.update_workday(
-                1,
-                False
-            )
-
-        finally:
-
-            conn.close()
-
-        self.assertEqual(
-            self.read_rows(
-                """
-                SELECT active
-                FROM Workdays
-                WHERE workday_id = 1
-                """
-            ),
-            [(0,)]
-        )
-
     def test_create_schedule_persists_record(self):
 
         service, conn = self.get_service()
@@ -600,7 +492,7 @@ class SchedulingTests(unittest.TestCase):
 
         self.assertIsNotNone(schedule)
 
-        self.assertEqual(schedule["week_start"], "2026-11-09")
+        self.assertEqual(schedule.week_start, "2026-11-09")
     
     def test_create_assignment_persists_record(self):
         
@@ -611,7 +503,7 @@ class SchedulingTests(unittest.TestCase):
             schedule = service.create_schedule("2026-11-09")
 
             service.create_assignment(
-                schedule["schedule_id"],
+                schedule.schedule_id,
                 101,
                 1,
                 1,
@@ -641,7 +533,7 @@ class SchedulingTests(unittest.TestCase):
             schedule = service.create_schedule("2026-11-09")
 
             service.create_assignment(
-                schedule["schedule_id"],
+                schedule.schedule_id,
                 101,
                 1,
                 1,
@@ -649,7 +541,7 @@ class SchedulingTests(unittest.TestCase):
                 8
             )
 
-            assignments = service.get_assignments(schedule["schedule_id"])
+            assignments = service.get_assignments(schedule.schedule_id)
         
         finally:
             conn.close()
@@ -671,7 +563,7 @@ class SchedulingTests(unittest.TestCase):
 
         self.assertIsNotNone(schedule)
 
-        self.assertEqual(schedule["week_start"], "2026-11-09")
+        self.assertEqual(schedule.week_start, "2026-11-09")
 
         self.assertEqual(
             self.read_rows(
@@ -701,7 +593,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             assignments = service.get_assignments(
-                schedule["schedule_id"]
+                schedule.schedule_id
             )
 
         finally:
@@ -732,7 +624,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             assignments = service.get_assignments(
-                schedule["schedule_id"]
+                schedule.schedule_id
             )
 
         finally:
@@ -781,7 +673,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             assignments = service.get_assignments(
-                schedule["schedule_id"]
+                schedule.schedule_id
             )
 
         finally:
@@ -816,7 +708,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             assignments = service.get_assignments(
-                schedule["schedule_id"]
+                schedule.schedule_id
             )
 
         finally:
@@ -836,7 +728,7 @@ class SchedulingTests(unittest.TestCase):
             service.create_staffing_requirement(1, 1, 1, 1)
 
             schedule, _ = service.generate_week("2026-11-09")
-            assignments = service.get_assignments(schedule["schedule_id"])
+            assignments = service.get_assignments(schedule.schedule_id)
         finally:
             conn.close()
 
@@ -854,7 +746,7 @@ class SchedulingTests(unittest.TestCase):
 
             # Employee already at max weekly hours
             service.create_assignment(
-                schedule["schedule_id"],
+                schedule.schedule_id,
                 101,
                 1,
                 1,
@@ -874,7 +766,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             assignments = service.get_assignments(
-                generated_schedule["schedule_id"]
+                generated_schedule.schedule_id
             )
 
         finally:
@@ -895,7 +787,7 @@ class SchedulingTests(unittest.TestCase):
             schedule = service.create_schedule("2026-11-09")
 
             service.create_assignment(
-                schedule["schedule_id"],
+                schedule.schedule_id,
                 101,
                 1,
                 1,
@@ -904,7 +796,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             service.create_assignment(
-                schedule["schedule_id"],
+                schedule.schedule_id,
                 101,
                 1,
                 1,
@@ -938,7 +830,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             service.create_assignment(
-                schedule["schedule_id"],
+                schedule.schedule_id,
                 101,
                 1,
                 1,
@@ -984,7 +876,7 @@ class SchedulingTests(unittest.TestCase):
             )
 
             assignments = service.get_assignments(
-                generated_schedule["schedule_id"]
+                generated_schedule.schedule_id
             )
 
         finally:

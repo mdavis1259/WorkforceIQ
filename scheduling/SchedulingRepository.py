@@ -6,109 +6,17 @@ database access and SQL for their module.
 
 Scheduling owns:
 
-    - Shifts
+    - Schedules
     - Staffing Requirements
+    - Shift Assignments
 """
-from scheduling.Shift import (ShiftRequirement, ShiftAssignment)
+from scheduling.Shift import (ShiftRequirement, ShiftAssignment, StaffingRequirement)
+from scheduling.Schedule import Schedule
 
 class SchedulingRepository:
 
     def __init__(self, conn):
         self.conn = conn
-
-    # ==========================================
-    # SHIFTS
-    # ==========================================
-
-    def get_shifts(self):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            SELECT *
-            FROM Shifts
-            ORDER BY start_time
-        """)
-
-        return cursor.fetchall()
-
-    def get_shift_by_id(self, shift_id):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            SELECT *
-            FROM Shifts
-            WHERE shift_id = ?
-        """, (shift_id,))
-
-        return cursor.fetchone()
-
-    def create_shift(
-        self,
-        shift_name,
-        start_time,
-        end_time
-    ):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO Shifts (
-                shift_name,
-                start_time,
-                end_time
-            )
-            VALUES (?, ?, ?)
-        """, (
-            shift_name,
-            start_time,
-            end_time
-        ))
-
-        self.conn.commit()
-
-        return self.get_shift_by_id(cursor.lastrowid)
-
-    def update_shift(
-        self,
-        shift_id,
-        shift_name,
-        start_time,
-        end_time
-    ):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            UPDATE Shifts
-            SET
-                shift_name = ?,
-                start_time = ?,
-                end_time = ?
-            WHERE shift_id = ?
-        """, (
-            shift_name,
-            start_time,
-            end_time,
-            shift_id
-        ))
-
-        self.conn.commit()
-
-        return self.get_shift_by_id(shift_id)
-
-    def delete_shift(self, shift_id):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            DELETE
-            FROM Shifts
-            WHERE shift_id = ?
-        """, (shift_id,))
-
-        self.conn.commit()
 
     # ===============================================
     # STAFFING REQUIREMENTS
@@ -144,8 +52,18 @@ class SchedulingRepository:
                 s.start_time,
                 r.role_name
         """)
-
-        return cursor.fetchall()
+        return [
+            StaffingRequirement(
+                workday_id=row["workday_id"],
+                day_name=row["day_name"],
+                shift_id=row["shift_id"],
+                shift_name=row["shift_name"],
+                role_id=row["role_id"],
+                role_name=row["role_name"],
+                required_count=row["required_count"]
+            )
+            for row in cursor.fetchall()
+        ]
 
     def get_staffing_requirement_by_id(
         self,
@@ -159,7 +77,17 @@ class SchedulingRepository:
             WHERE requirement_id = ?
         """, ( requirement_id,))
 
-        return cursor.fetchone()
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return StaffingRequirement(
+            workday_id=row["workday_id"],
+            shift_id=row["shift_id"],
+            role_id=row["role_id"],
+            required_count=row["required_count"]
+        )
 
     def staffing_requirement_exists(self, workday_id, shift_id, role_id):
 
@@ -236,47 +164,6 @@ class SchedulingRepository:
 
         self.conn.commit()
 
-    # =========================================================
-    # WORKDAYS
-    # =========================================================
-    def get_workdays(self):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            SELECT *
-            FROM Workdays
-            ORDER BY Workday_id
-        """)
-
-        return cursor.fetchall()
-
-    def get_workday_by_id(self, workday_id):
-    
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            SELECT *
-            FROM Workdays
-            WHERE workday_id = ?
-        """, (workday_id,))
-
-        return cursor.fetchone()
-
-    def update_workday(self, workday_id, active):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            UPDATE Workdays
-            SET active = ?
-            WHERE workday_id = ?
-        """, (int(active), workday_id))
-
-        self.conn.commit()
-
-        return self.get_workday_by_id(workday_id)
-
     # =====================================================
     # SCHEDULES
     # =====================================================
@@ -309,7 +196,16 @@ class SchedulingRepository:
             WHERE schedule_id = ?
         """, (schedule_id,))
 
-        return cursor.fetchone()
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return Schedule(
+            schedule_id=row["schedule_id"],
+            week_start=row["week_start"],
+            status=row["status"]
+        )
 
     def get_schedule_by_week(self, week_start):
         
@@ -321,7 +217,16 @@ class SchedulingRepository:
             WHERE week_start = ?
         """, (week_start,))
 
-        return cursor.fetchone()
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return Schedule(
+            schedule_id=row["schedule_id"],
+            week_start=row["week_start"],
+            status=row["status"]
+        )
 
     # ===============================================
     # ASSIGNMENTS
@@ -379,7 +284,21 @@ class SchedulingRepository:
             ORDER BY sa.schedule_date
         """, (schedule_id,))
 
-        return cursor.fetchall()
+        return [
+            ShiftAssignment(
+                assignment_id=row["assignment_id"],
+                schedule_id=row["schedule_id"],
+                employee_id=row["employee_id"],
+                role_id=row["role_id"],
+                shift_id=row["shift_id"],
+                schedule_date=row["schedule_date"],
+                employee_name=f"{row['first_name']} {row['last_name']}",
+                role_name=row["role_name"] if "role_name" in row.keys() else "",
+                hours=row["hours"]
+            )
+            for row in cursor.fetchall()
+        ]
+    
 
     def get_assignments_for_shift(self, schedule_id, shift_id, schedule_date):
         
@@ -471,99 +390,76 @@ class SchedulingRepository:
                 r.role_name
         """)
 
-        rows = cursor.fetchall()
+        return [
+            StaffingRequirement(
+                workday_id=row["workday_id"],
+                day_name=row["day_name"],
+                shift_id=row["shift_id"],
+                shift_name=row["shift_name"],
+                role_id=row["role_id"],
+                role_name=row["role_name"],
+                required_count=row["required_count"]
+            )
+            for row in cursor.fetchall()
+        ]
+        
+    def get_employee_hours_for_week(
+    self,
+    employee_id,
+    week_start
+    ):
+        cursor = self.conn.cursor()
 
-        if rows:
-            print(dict(rows[0]))
+        cursor.execute("""
+            SELECT COALESCE(
+                SUM(hours),
+                0
+            )
+            FROM ShiftAssignments
+            WHERE employee_id = ?
+            AND schedule_date >= ?
+            AND schedule_date <= date(
+                ?,
+                '+7 days'
+            )
+        """, (
+            employee_id,
+            week_start,
+            week_start
+        ))
 
-        return rows
+        return cursor.fetchone()[0]
 
-    # ======================================
-    # EMPLOYEES
-    # ======================================
-
-    def get_employees_by_role(self, role_id):
-
+    def get_employees_by_role(
+        self,
+        role_id
+    ):
         cursor = self.conn.cursor()
 
         cursor.execute("""
             SELECT *
             FROM Employees
             WHERE role_id = ?
-            AND active = 1
         """, (role_id,))
 
         return cursor.fetchall()
 
-    def get_employee_hours_for_week(self, employee_id, week_start):
-
+    def has_overlapping_assignment(
+            self,
+            employee_id,
+            schedule_date,
+            shift_id
+    ):
         cursor = self.conn.cursor()
 
         cursor.execute("""
-            SELECT COALESCE(SUM(hours), 0)
+            SELECT 1
             FROM ShiftAssignments
             WHERE employee_id = ?
-                AND schedule_date >= ?
-                AND schedule_date <= date(?, '+7 days')
-        """, (employee_id, week_start, week_start))
+            AND schedule_date = ?
+        """, (
+            employee_id,
+            schedule_date,
+        ))
 
-        return cursor.fetchone()[0]
-
-    def get_employee_assignments_for_date(self, employee_id, schedule_date):
-
-        cursor = self.conn.cursor()
-
-        cursor.execute("""
-            SELECT sa.*,
-                   s.start_time,
-                   s.end_time
-            FROM ShiftAssignments sa
-            JOIN Shifts s
-                ON s.shift_id = sa.shift_id
-            WHERE sa.employee_id = ?
-            AND sa.schedule_date = ?
-        """, (employee_id, schedule_date))
-
-        return cursor.fetchall()
-
-    def has_overlapping_assignment(self, employee_id, schedule_date, shift_id):
-
-        cursor = self.conn.cursor()
-
-        # Candidate shift
-        cursor.execute("""
-            SELECT start_time, end_time
-            FROM Shifts
-            WHERE shift_id = ?
-        """, (shift_id,))
-
-        candidate_shift = cursor.fetchone()
-
-        if candidate_shift is None:
-            return False
-
-        candidate_start = candidate_shift["start_time"]
-        candidate_end = candidate_shift["end_time"]
-
-        # Existing assignments for same employee/date
-        cursor.execute("""
-            SELECT
-                s.start_time,
-                s.end_time
-            FROM ShiftAssignments sa
-            JOIN Shifts s
-                ON s.shift_id = sa.shift_id
-            WHERE sa.employee_id = ?
-            AND sa.schedule_date = ?
-        """, (employee_id, schedule_date))
-
-        assignments = cursor.fetchall()
-
-        for assignment in assignments:
-            existing_start = assignment["start_time"]
-            existing_end = assignment["end_time"]
-
-            if (candidate_start < existing_end and candidate_end > existing_start):
-                return True
-        
-        return False
+        return cursor.fetchone() is not None

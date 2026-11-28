@@ -11,4 +11,3 @@ class Assignment:
     role_id: str
     hours: str
     projected_cost: str
-

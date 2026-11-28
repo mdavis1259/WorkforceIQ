@@ -1,5 +1,9 @@
+# TODO: refactor to utilize data objects not rows
+
 from shared.exceptions import ValidationError
 from datetime import datetime, timedelta
+from scheduling.Shift import (ShiftAssignment, ShiftRequirement)
+from scheduling.Schedule import Schedule
 
 class SchedulingService:
 
@@ -16,13 +20,27 @@ class SchedulingService:
         self.forecasting_service = forecasting_service
         self.availability_service = availability_service
 
-    # ==========================================
-    # SHIFTS
-    # ==========================================
+    # TODO: Temporary Compatibility Wrappers
+    def get_schedule(self, week_start):
+        return self.get_week(week_start)
 
-    def list_shifts(self):
-
-        return self.scheduling_repository.get_shifts()
+    def create_assignment(
+        self,
+        schedule_id,
+        employee_id,
+        role_id,
+        shift_id,
+        schedule_date,
+        hours
+    ):
+        return self._create_assignment(
+            schedule_id,
+            employee_id,
+            role_id,
+            shift_id,
+            schedule_date,
+            hours
+        )
 
     def create_shift(
         self,
@@ -30,20 +48,9 @@ class SchedulingService:
         start_time,
         end_time
     ):
-
         if not shift_name:
             raise ValidationError(
                 "Shift name is required."
-            )
-
-        if not start_time:
-            raise ValidationError(
-                "Start time is required."
-            )
-
-        if not end_time:
-            raise ValidationError(
-                "End time is required."
             )
 
         return self.scheduling_repository.create_shift(
@@ -52,63 +59,24 @@ class SchedulingService:
             end_time
         )
 
-    def update_shift(
-        self,
-        shift_id,
-        shift_name,
-        start_time,
-        end_time
-    ):
-
-        if shift_id is None:
-            raise ValidationError(
-                "Shift ID is required."
-            )
-
-        if not shift_name:
-            raise ValidationError(
-                "Shift name is required."
-            )
-
-        if not start_time:
-            raise ValidationError(
-                "Start time is required."
-            )
-
-        if not end_time:
-            raise ValidationError(
-                "End time is required."
-            )
-
-        existing_shift = (
-            self.scheduling_repository.get_shift_by_id(
-                shift_id
-            )
+    def update_shift(self, *args, **kwargs):
+        return self.availability_service.update_shift(
+            *args,
+            **kwargs
         )
 
-        if existing_shift is None:
-            raise ValidationError(
-                "Shift not found."
-            )
-
-        return self.scheduling_repository.update_shift(
-            shift_id,
-            shift_name,
-            start_time,
-            end_time
+    def delete_shift(self, *args, **kwargs):
+        return self.availability_service.delete_shift(
+            *args,
+            **kwargs
         )
 
-    def delete_shift(self, shift_id):
+    def update_workday(self, *args, **kwargs):
+        return self.availability_service.update_workday(
+            *args,
+            **kwargs
+        )
 
-        if shift_id is None:
-            raise ValidationError("Shift ID is required.")
-
-        existing_shift = self.scheduling_repository.get_shift_by_id(shift_id)
-
-        if existing_shift is None:
-            raise ValidationError("Shift not found.")
-
-        self.scheduling_repository.delete_shift(shift_id)
 
     def get_shift_details(self, schedule_id, shift_id, schedule_date, workday_id):
 
@@ -217,26 +185,6 @@ class SchedulingService:
 
         self.scheduling_repository.delete_staffing_requirement(requirement_id)
 
-    # ==================================================
-    # WORKDAYS
-    # ==================================================
-
-    def list_workdays(self):
-
-        return self.scheduling_repository.get_workdays()
-
-    def update_workday(self, workday_id, active):
-        
-        if workday_id is None:
-            raise ValidationError("Workday ID is required.")
-
-        existing = self.scheduling_repository.get_workday_by_id(workday_id)
-
-        if existing is None:
-            raise ValidationError("Workday not found.")
-
-        return self.scheduling_repository.update_workday(workday_id, active)
-
     # ===================================================
     # SCHEDULE GENERATION
     # ===================================================
@@ -246,13 +194,13 @@ class SchedulingService:
         if not week_start:
             raise ValidationError("Week start date is required.")
 
-        existing = self.get_schedule(week_start)
+        existing = self.get_week(week_start)
         if existing:
             return existing
 
         return self.scheduling_repository.create_schedule(week_start)
 
-    def get_schedule(self, week_start):
+    def get_week(self, week_start):
 
         return self.scheduling_repository.get_schedule_by_week(week_start)
     
@@ -354,8 +302,8 @@ class SchedulingService:
 
                 employee = candidate_employees.pop(0)
 
-                self.create_assignment(
-                    schedule["schedule_id"],
+                self._create_assignment(
+                    schedule.schedule_id,
                     employee["employee_id"],
                     requirement["role_id"],
                     requirement["shift_id"],
@@ -415,7 +363,7 @@ class SchedulingService:
     # ===================================================
     # ASSIGNMENTS
     # ===================================================
-    def create_assignment(
+    def _create_assignment(
         self,
         schedule_id,
         employee_id,
